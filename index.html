@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>星星积累小助手</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-a"></div>
+    <div class="bg-shape bg-shape-b"></div>
+
+    <main class="app">
+      <header class="hero">
+        <small id="todayDateText" class="today-date">今天是 --</small>
+        <div class="hero-top-actions">
+          <div class="role-switch" id="roleSwitch">
+            <button class="role-btn" data-role="child">孩子界面</button>
+            <button class="role-btn" data-role="parent">家长界面</button>
+          </div>
+          <select id="themeSelect" class="theme-select">
+            <option value="sunny">晴空主题</option>
+            <option value="ocean">海洋主题</option>
+            <option value="space">太空主题</option>
+            <option value="festival">节日主题</option>
+          </select>
+        </div>
+      </header>
+
+      <section id="childPanel" class="panel">
+        <div class="child-top-grid">
+          <article class="card">
+            <h2>我的星星</h2>
+            <div class="star-panel">
+              <span>当前⭐</span>
+              <strong id="childStarCount">0</strong>
+            </div>
+          </article>
+
+          <article class="card">
+            <h2>连续打卡</h2>
+            <div class="streak-wrap">
+              <span id="openStreakText" class="streak-badge">连续打卡 1 天</span>
+              <small id="streakHintText">继续保持，明天再来打卡！</small>
+              <small id="makeupInfoText">本周补签剩余 1 次</small>
+              <button id="makeupCheckinBtn" class="btn-soft" type="button">使用补签卡</button>
+            </div>
+          </article>
+
+          <article class="card">
+            <h2>本周进度</h2>
+            <div class="goal-wrap">
+              <small id="weeklyGoalText">本周进度：0/20⭐</small>
+              <div class="goal-bar"><div id="weeklyGoalBar" class="goal-fill"></div></div>
+              <small id="goalMotivateText">再努力一点就能达标！</small>
+              <div id="milestoneRow" class="milestone-row"></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="grid">
+          <article class="card">
+            <h2>今日任务</h2>
+            <small id="todayTaskSummary">今天已完成 0/0 项</small>
+            <ul id="childTaskList" class="list"></ul>
+          </article>
+
+          <article class="card">
+            <h2>奖励兑换</h2>
+            <ul id="childRewardList" class="list"></ul>
+          </article>
+        </div>
+
+      </section>
+
+      <section id="parentPanel" class="panel hidden">
+        <div class="parent-top-grid">
+          <article class="card">
+            <h2>总星星</h2>
+            <div class="star-panel">
+              <span>当前⭐</span>
+              <strong id="parentStarCount">0</strong>
+            </div>
+          </article>
+
+          <article class="card">
+            <h2>每周目标</h2>
+            <form id="goalForm" class="inline-form goal-form">
+              <input id="weeklyGoalInput" type="number" min="5" max="100" value="20" required />
+              <button type="submit">保存目标</button>
+            </form>
+          </article>
+
+          <article class="card">
+            <h2>家长安全</h2>
+            <div class="stack-block">
+              <form id="pinForm" class="inline-form pin-form">
+                <input id="pinInput" type="password" maxlength="8" placeholder="设置家长PIN(4-8位)" />
+                <button type="submit">保存PIN</button>
+                <button type="button" id="pinOffBtn" class="btn-ghost">关闭PIN</button>
+              </form>
+              <form id="pinGraceForm" class="inline-form goal-form">
+                <input id="pinGraceInput" type="number" min="0" max="120" value="5" placeholder="PIN免输分钟" />
+                <button type="submit">保存免输时长</button>
+              </form>
+            </div>
+          </article>
+        </div>
+
+        <article class="card">
+          <h2>系统与补签设置</h2>
+          <div class="settings-grid">
+            <div class="settings-col">
+              <label class="inline-check"><input id="soundToggle" type="checkbox" /> 开启音效反馈</label>
+              <label class="inline-check"><input id="reduceMotionToggle" type="checkbox" /> 简化动画（低性能模式）</label>
+              <small id="syncStatusText">同步模式：本地（未启用云同步）</small>
+              <button id="syncCheckBtn" type="button" class="btn-soft">检查同步状态</button>
+            </div>
+            <div class="settings-col">
+              <form id="makeupConfigForm" class="inline-form goal-form">
+                <input id="makeupWeeklyLimitInput" type="number" min="0" max="7" value="1" placeholder="每周补签次数" />
+                <button type="submit">保存补签规则</button>
+              </form>
+              <small class="setting-note">当前规则：仅支持补签昨天（前一天漏打卡时显示补签按钮）。</small>
+              <label class="inline-check"><input id="makeupCountMilestoneToggle" type="checkbox" /> 补签可触发里程碑奖励</label>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>额外奖励</h2>
+          <form id="bonusForm" class="inline-form">
+            <input id="bonusReason" type="text" maxlength="40" placeholder="奖励原因（如：主动帮助家务）" required />
+            <input id="bonusStars" type="number" min="1" max="50" value="1" required />
+            <button type="submit">奖励星星</button>
+          </form>
+        </article>
+
+        <div class="grid">
+          <article class="card">
+            <h2>任务管理</h2>
+            <form id="taskForm" class="inline-form">
+              <input id="taskName" type="text" maxlength="30" placeholder="任务名称（如：读书20分钟）" required />
+              <input id="taskStars" type="number" min="1" max="20" value="1" required />
+              <button type="submit" id="taskSubmitBtn">添加任务</button>
+            </form>
+            <label class="inline-check"><input id="taskNeedProof" type="checkbox" /> 需要拍照凭证</label>
+            <button type="button" id="taskCancelEdit" class="btn-ghost hidden">取消编辑</button>
+            <ul id="parentTaskList" class="list"></ul>
+          </article>
+
+          <article class="card">
+            <h2>奖励管理</h2>
+            <form id="rewardForm" class="inline-form">
+              <input id="rewardName" type="text" maxlength="30" placeholder="奖励名称（如：周末看电影）" required />
+              <input id="rewardCost" type="number" min="1" max="200" value="5" required />
+              <button type="submit" id="rewardSubmitBtn">添加奖励</button>
+            </form>
+            <form id="rewardExtraForm" class="inline-form compact-form">
+              <input id="rewardStock" type="number" min="0" max="99" placeholder="库存(空=不限)" />
+              <input id="rewardCooldown" type="number" min="0" max="30" placeholder="冷却天数(空=无)" />
+              <button type="button" disabled>附加规则</button>
+            </form>
+            <button type="button" id="rewardCancelEdit" class="btn-ghost hidden">取消编辑</button>
+            <ul id="parentRewardList" class="list"></ul>
+          </article>
+        </div>
+
+        <article class="card">
+          <h2>行为统计</h2>
+          <select id="statsRange" class="filter-select">
+            <option value="week">本周</option>
+            <option value="all">全部</option>
+          </select>
+          <div id="statsBox" class="stats-grid"></div>
+        </article>
+
+        <article class="card">
+          <h2>待家长评分</h2>
+          <input id="pendingSearchInput" type="text" placeholder="搜索待评分任务" />
+          <div class="action-row">
+            <button id="undoLastRatingBtn" class="btn-ghost" type="button">撤销上一条评分</button>
+            <button id="resetTodayBtn" class="btn-ghost" type="button">重置今天任务状态</button>
+            <button id="approveAllActiveBtn" class="btn-active" type="button">一键全部主动</button>
+            <button id="approveAllRemindBtn" class="btn-remind" type="button">一键全部提醒</button>
+          </div>
+          <ul id="parentPendingList" class="list"></ul>
+        </article>
+
+        <article class="card">
+          <h2>最近记录</h2>
+          <input id="historySearchInput" type="text" placeholder="搜索记录关键字" />
+          <select id="parentHistoryFilter" class="filter-select">
+            <option value="all">全部</option>
+            <option value="today">今天</option>
+            <option value="task">任务</option>
+            <option value="redeem">兑换</option>
+            <option value="bonus">额外奖励</option>
+            <option value="system">系统</option>
+          </select>
+          <ul id="parentHistoryList" class="history"></ul>
+          <div class="action-row">
+            <button id="exportBtn" type="button">导出数据</button>
+            <button id="exportCsvBtn" type="button" class="btn-soft">导出CSV</button>
+            <label class="file-btn">导入数据<input id="importInput" type="file" accept="application/json" /></label>
+          </div>
+          <div class="action-row">
+            <select id="restorePointSelect" class="filter-select"></select>
+            <button id="restorePointBtn" type="button" class="btn-ghost">恢复到该时间点</button>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <div id="redeemModal" class="modal hidden">
+      <div class="modal-card">
+        <h3>确认兑换</h3>
+        <p id="redeemModalText"></p>
+        <div class="modal-actions">
+          <button id="redeemConfirmBtn" class="btn-active">确认兑换</button>
+          <button id="redeemCancelBtn" class="btn-passive">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pinModal" class="modal hidden">
+      <div class="modal-card pin-modal-card">
+        <h3 class="pin-title">🔐 家长验证</h3>
+        <p class="pin-desc">请输入家长PIN后进入管理界面</p>
+        <input id="pinVerifyInput" type="password" maxlength="8" placeholder="输入PIN" />
+        <div class="modal-actions">
+          <button id="pinVerifyBtn" class="btn-active">进入家长界面</button>
+          <button id="pinCancelBtn" class="btn-passive">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="uiModal" class="modal hidden">
+      <div class="modal-card ui-modal-card">
+        <h3 id="uiModalTitle">提示</h3>
+        <p id="uiModalMessage"></p>
+        <input id="uiModalInput" class="hidden" type="text" />
+        <div class="modal-actions">
+          <button id="uiModalConfirmBtn" class="btn-active">确认</button>
+          <button id="uiModalCancelBtn" class="btn-passive">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
