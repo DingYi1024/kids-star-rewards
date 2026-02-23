@@ -50,7 +50,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: "Avenir Next", "Trebuchet MS", "Microsoft YaHei UI", sans-serif;
   background:
     radial-gradient(1200px 680px at -8% -10%, rgba(255, 255, 255, 0.9) 0%, transparent 45%),
     radial-gradient(800px 620px at 108% 105%, rgba(255, 255, 255, 0.65) 0%, transparent 45%),
@@ -115,15 +115,43 @@ body::after {
 .app {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 24px 16px 44px;
+  padding: 24px 16px 48px;
 }
 
 .hero {
+  position: relative;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   justify-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   animation: rise 420ms ease;
+}
+
+.hero::after {
+  content: "";
+  width: min(420px, 86vw);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 45%, #ffffff), transparent);
+}
+
+.hero-brand {
+  text-align: center;
+}
+
+.hero-brand h1 {
+  margin: 0;
+  font-size: clamp(1.55rem, 3.1vw, 2.1rem);
+  line-height: 1.1;
+  letter-spacing: 0.4px;
+  color: #253452;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.hero-brand p {
+  margin: 6px 0 0;
+  color: #4f5f7f;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .today-date {
@@ -237,6 +265,32 @@ body::after {
   padding: 14px;
   box-shadow: var(--shadow);
   animation: rise 460ms ease;
+}
+
+.card::before {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  opacity: 0.8;
+}
+
+.child-top-grid .card:nth-child(1),
+.parent-top-grid .card:nth-child(1) {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 13%, #ffffff), rgba(255, 255, 255, 0.84));
+}
+
+.child-top-grid .card:nth-child(2),
+.parent-top-grid .card:nth-child(2) {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent-2) 12%, #ffffff), rgba(255, 255, 255, 0.84));
+}
+
+.child-top-grid .card:nth-child(3),
+.parent-top-grid .card:nth-child(3) {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--ok) 12%, #ffffff), rgba(255, 255, 255, 0.84));
 }
 
 .card h2 {
@@ -404,6 +458,15 @@ select {
   min-height: 42px;
   padding: 8px 10px;
   background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+.file-btn:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, #ffffff);
+  outline-offset: 2px;
 }
 
 button {
@@ -537,6 +600,13 @@ button:disabled {
   align-items: flex-start;
   gap: 8px;
   background: rgba(255, 255, 255, 0.74);
+  transition: transform 130ms ease, box-shadow 130ms ease, border-color 130ms ease;
+}
+
+.item:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  box-shadow: 0 8px 16px rgba(31, 41, 73, 0.08);
 }
 
 .item.pending-highlight {
@@ -618,7 +688,8 @@ button:disabled {
   position: fixed;
   inset: 0;
   padding: 14px;
-  background: rgba(19, 25, 41, 0.34);
+  background: rgba(16, 22, 37, 0.42);
+  backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
 }
@@ -634,6 +705,7 @@ button:disabled {
   border-radius: 16px;
   padding: 14px;
   box-shadow: var(--shadow);
+  animation: rise 220ms ease;
 }
 
 .modal-card h3 {
@@ -714,6 +786,10 @@ body.reduce-motion *::after {
 }
 
 @media (max-width: 860px) {
+  .hero-brand p {
+    font-size: 0.9rem;
+  }
+
   .child-top-grid,
   .parent-top-grid,
   .grid,
