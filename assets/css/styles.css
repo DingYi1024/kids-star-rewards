@@ -662,6 +662,23 @@ body::after {
   gap: 6px;
 }
 
+.gacha-box-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid #dde6f8;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #f8fbff, #eef4ff);
+}
+
+.gacha-box-wrap small {
+  color: #51607a;
+  font-weight: 600;
+}
+
 .streak-details-btn {
   justify-self: start;
   min-height: 32px;
@@ -940,12 +957,14 @@ body::after {
 
 input,
 select,
+textarea,
 button {
   font: inherit;
 }
 
 input,
-select {
+select,
+textarea {
   border: 1px solid var(--line);
   border-radius: 12px;
   min-height: 42px;
@@ -956,6 +975,7 @@ select {
 
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 button:focus-visible,
 .file-btn:focus-within {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, #ffffff);
@@ -1324,6 +1344,42 @@ button:disabled {
 
 .item small {
   color: #666f83;
+}
+
+.hot-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #8b5208;
+  background: #ffe8c7;
+  border: 1px solid #ffd7a3;
+}
+
+.audit-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  color: #2e5e86;
+  background: #e6f3ff;
+  border: 1px solid #c6e3ff;
+}
+
+#gachaPoolInput {
+  width: 100%;
+  min-height: 86px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.88);
+  font: inherit;
 }
 
 .task-actions {

@@ -63,6 +63,20 @@ const defaultData = {
     weeklyLimit: 30
   },
   bonusUsageByWeek: {},
+  pricingConfig: {
+    hotStockThreshold: 1,
+    hotMarkupPercent: 20
+  },
+  gachaConfig: {
+    enabled: true,
+    cost: 5,
+    pool: [
+      { id: crypto.randomUUID(), name: "棒棒糖", stars: 0, weight: 3 },
+      { id: crypto.randomUUID(), name: "今天免一次小家务", stars: 0, weight: 2 },
+      { id: crypto.randomUUID(), name: "再得 2⭐", stars: 2, weight: 2 },
+      { id: crypto.randomUUID(), name: "再来一次", stars: 0, weight: 1 }
+    ]
+  },
   theme: "sunny",
   restorePoints: [],
   tasks: [
@@ -176,6 +190,32 @@ function normalizeDataShape() {
   if (!state.bonusConfig || typeof state.bonusConfig !== "object") state.bonusConfig = { weeklyLimit: 30 };
   state.bonusConfig.weeklyLimit = Math.max(1, Number(state.bonusConfig.weeklyLimit || 30));
   if (!state.bonusUsageByWeek || typeof state.bonusUsageByWeek !== "object") state.bonusUsageByWeek = {};
+  if (!state.pricingConfig || typeof state.pricingConfig !== "object") {
+    state.pricingConfig = { hotStockThreshold: 1, hotMarkupPercent: 20 };
+  }
+  state.pricingConfig.hotStockThreshold = Math.max(1, Number(state.pricingConfig.hotStockThreshold || 1));
+  state.pricingConfig.hotMarkupPercent = Math.max(0, Number(state.pricingConfig.hotMarkupPercent || 0));
+  if (!state.gachaConfig || typeof state.gachaConfig !== "object") {
+    state.gachaConfig = { enabled: true, cost: 5, pool: [] };
+  }
+  state.gachaConfig.enabled = Boolean(state.gachaConfig.enabled);
+  state.gachaConfig.cost = Math.max(1, Number(state.gachaConfig.cost || 5));
+  if (!Array.isArray(state.gachaConfig.pool) || !state.gachaConfig.pool.length) {
+    state.gachaConfig.pool = [
+      { id: crypto.randomUUID(), name: "棒棒糖", stars: 0, weight: 3 },
+      { id: crypto.randomUUID(), name: "今天免一次小家务", stars: 0, weight: 2 },
+      { id: crypto.randomUUID(), name: "再得 2⭐", stars: 2, weight: 2 },
+      { id: crypto.randomUUID(), name: "再来一次", stars: 0, weight: 1 }
+    ];
+  }
+  state.gachaConfig.pool = state.gachaConfig.pool
+    .map((item) => ({
+      id: item?.id || crypto.randomUUID(),
+      name: String(item?.name || "神秘奖励").trim() || "神秘奖励",
+      stars: Math.max(0, Number(item?.stars || 0)),
+      weight: Math.max(1, Number(item?.weight || 1))
+    }))
+    .slice(0, 20);
   if (!Array.isArray(state.restorePoints)) state.restorePoints = [];
   if (typeof state.theme !== "string") state.theme = "sunny";
   state.makeupConfig.weeklyLimit = Math.max(0, Number(state.makeupConfig.weeklyLimit ?? 1));
@@ -208,7 +248,14 @@ function normalizeDataShape() {
     }
   }
 
-  state.history = state.history.map((item) => ({ type: "system", ...item }));
+  state.history = state.history.map((item) => ({
+    type: "system",
+    actor: "system",
+    audit: false,
+    action: "",
+    detail: "",
+    ...item
+  }));
 }
 
 normalizeDataShape();
@@ -313,6 +360,9 @@ const claimGoalChestBtn = document.querySelector("#claimGoalChestBtn");
 
 const childTaskList = document.querySelector("#childTaskList");
 const childRewardList = document.querySelector("#childRewardList");
+const gachaBoxWrap = document.querySelector("#gachaBoxWrap");
+const gachaHintText = document.querySelector("#gachaHintText");
+const gachaDrawBtn = document.querySelector("#gachaDrawBtn");
 const todayTaskSummary = document.querySelector("#todayTaskSummary");
 const childHistoryList = document.querySelector("#childHistoryList");
 const childHistoryFilter = document.querySelector("#childHistoryFilter");
@@ -330,6 +380,15 @@ const rewardName = document.querySelector("#rewardName");
 const rewardCost = document.querySelector("#rewardCost");
 const rewardStock = document.querySelector("#rewardStock");
 const rewardCooldown = document.querySelector("#rewardCooldown");
+const dynamicPricingForm = document.querySelector("#dynamicPricingForm");
+const hotStockThresholdInput = document.querySelector("#hotStockThresholdInput");
+const hotMarkupPercentInput = document.querySelector("#hotMarkupPercentInput");
+const gachaConfigForm = document.querySelector("#gachaConfigForm");
+const gachaCostInput = document.querySelector("#gachaCostInput");
+const gachaEnabledToggle = document.querySelector("#gachaEnabledToggle");
+const gachaPoolInput = document.querySelector("#gachaPoolInput");
+const saveGachaPoolBtn = document.querySelector("#saveGachaPoolBtn");
+const gachaPoolSummary = document.querySelector("#gachaPoolSummary");
 const rewardSubmitBtn = document.querySelector("#rewardSubmitBtn");
 const rewardCancelEdit = document.querySelector("#rewardCancelEdit");
 const parentRewardList = document.querySelector("#parentRewardList");
@@ -586,6 +645,25 @@ function applyTimezoneConfig() {
   setFixedOffsetMinutes(fixedOffsetMinutes === null || fixedOffsetMinutes === "" ? null : Number(fixedOffsetMinutes));
 }
 
+function gachaPoolToText() {
+  const pool = Array.isArray(state.gachaConfig?.pool) ? state.gachaConfig.pool : [];
+  return pool.map((item) => `${item.name}|${Math.max(0, Number(item.stars || 0))}|${Math.max(1, Number(item.weight || 1))}`).join("\n");
+}
+
+function parseGachaPoolText(rawText) {
+  const lines = String(rawText || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  const parsed = [];
+  for (const line of lines) {
+    const [nameRaw, starsRaw = "0", weightRaw = "1"] = line.split("|");
+    const name = String(nameRaw || "").trim();
+    const stars = Math.max(0, Number(starsRaw || 0));
+    const weight = Math.max(1, Number(weightRaw || 1));
+    if (!name || !Number.isFinite(stars) || !Number.isFinite(weight)) continue;
+    parsed.push({ id: crypto.randomUUID(), name, stars, weight });
+  }
+  return parsed.slice(0, 20);
+}
+
 function getMakeupRemainThisWeek() {
   const usage = getMakeupUsageMap(weekStartKey());
   return Math.max(0, Number(state.makeupConfig.weeklyLimit || 0) - Number(usage.count || 0));
@@ -635,6 +713,31 @@ function hasCheckinOnDay(dayKey) {
 function remainingStock(reward) {
   if (!Number.isFinite(reward.stock)) return Infinity;
   return Math.max(0, reward.stock - usedStockThisWeek(reward.id));
+}
+
+function dynamicMarkupApplies(reward) {
+  if (!Number.isFinite(reward.stock)) return false;
+  const threshold = Math.max(1, Number(state.pricingConfig?.hotStockThreshold || 1));
+  return remainingStock(reward) <= threshold;
+}
+
+function getDynamicRewardCost(reward) {
+  const base = Math.max(1, Number(reward.cost || 1));
+  if (!dynamicMarkupApplies(reward)) return base;
+  const markupPercent = Math.max(0, Number(state.pricingConfig?.hotMarkupPercent || 0));
+  return Math.ceil(base * (1 + markupPercent / 100));
+}
+
+function drawGachaReward() {
+  const pool = Array.isArray(state.gachaConfig?.pool) ? state.gachaConfig.pool : [];
+  if (!pool.length) return null;
+  const totalWeight = pool.reduce((sum, item) => sum + Math.max(1, Number(item.weight || 1)), 0);
+  let roll = Math.random() * totalWeight;
+  for (const item of pool) {
+    roll -= Math.max(1, Number(item.weight || 1));
+    if (roll <= 0) return item;
+  }
+  return pool[pool.length - 1] || null;
 }
 
 function getLastRedeemDay(rewardId) {
@@ -756,16 +859,32 @@ async function tryUseMakeupCard() {
   renderAll();
 }
 
-function addHistory(text, delta, type = "system") {
+function addHistory(text, delta, type = "system", options = {}) {
+  const actor = options.actor || (ui.role === "parent" ? "parent" : "child");
+  const audit = Boolean(options.audit);
+  const action = options.action || "";
+  const detail = options.detail || "";
   state.history.unshift({
     id: crypto.randomUUID(),
     text,
     delta,
     type,
+    actor,
+    audit,
+    action,
+    detail,
     dateKey: todayKey(),
     at: new Date().toLocaleString()
   });
-  state.history = state.history.slice(0, 60);
+  state.history = state.history.slice(0, 120);
+}
+
+function addAudit(text, delta = 0, type = "system", options = {}) {
+  addHistory(text, delta, type, {
+    ...options,
+    audit: true,
+    actor: options.actor || "parent"
+  });
 }
 
 function awardStars(stars, type, text) {
@@ -820,6 +939,7 @@ function clearRewardEdit() {
 async function openRedeemModal(rewardId) {
   const reward = state.rewards.find((r) => r.id === rewardId);
   if (!reward) return;
+  const dynamicCost = getDynamicRewardCost(reward);
   if (remainingStock(reward) <= 0) {
     await showAlert("这个奖励本周库存已用完，下周会自动恢复。", "无法兑换");
     return;
@@ -831,7 +951,7 @@ async function openRedeemModal(rewardId) {
     return;
   }
   ui.pendingRedeemId = rewardId;
-  redeemModalText.textContent = `确认兑换「${reward.name}」吗？将扣除 ${reward.cost}⭐。`;
+  redeemModalText.textContent = `确认兑换「${reward.name}」吗？将扣除 ${dynamicCost}⭐。`;
   redeemModal.classList.remove("hidden");
 }
 
@@ -924,17 +1044,24 @@ async function undoLastRating() {
 
 function redeemRewardByChild(rewardId) {
   const reward = state.rewards.find((item) => item.id === rewardId);
-  if (!reward || state.stars < reward.cost) return;
+  if (!reward) return;
+  const dynamicCost = getDynamicRewardCost(reward);
+  if (state.stars < dynamicCost) return;
   if (!canRedeemByCooldown(reward)) return;
   if (remainingStock(reward) <= 0) return;
 
   captureRestorePoint("兑换前");
-  state.stars -= reward.cost;
+  state.stars -= dynamicCost;
   const usage = getWeekUsageMap(weekStartKey());
   usage[reward.id] = Number(usage[reward.id] || 0) + 1;
   state.redeemLog.unshift({ rewardId: reward.id, day: todayKey() });
   state.redeemLog = state.redeemLog.slice(0, 200);
-  addHistory(`兑换奖励「${reward.name}」`, -reward.cost, "redeem");
+  addHistory(`兑换奖励「${reward.name}」`, -dynamicCost, "redeem");
+  addAudit(`奖励兑换：${reward.name}（支付 ${dynamicCost}⭐）`, -dynamicCost, "redeem", {
+    action: "redeem_reward",
+    detail: `base:${reward.cost},dynamic:${dynamicCost}`,
+    actor: "child"
+  });
   playSound("redeem");
   saveData();
   renderAll();
@@ -951,9 +1078,50 @@ async function grantBonusByParent(reason, stars) {
   const usage = getBonusUsageMap(weekStartKey());
   usage.stars = Number(usage.stars || 0) + stars;
   awardStars(stars, "bonus", `家长额外奖励：${reason}`);
+  addAudit(`额外加分：${reason}`, stars, "bonus", {
+    action: "grant_bonus",
+    detail: `reason:${reason}`
+  });
   saveData();
   renderAll();
   return true;
+}
+
+async function playGachaByChild() {
+  if (!state.gachaConfig?.enabled) {
+    await showAlert("盲盒功能暂未开启。", "盲盒未开启");
+    return;
+  }
+  const cost = Math.max(1, Number(state.gachaConfig.cost || 5));
+  if (state.stars < cost) {
+    await showAlert(`盲盒需要 ${cost}⭐，当前星星不足。`, "无法抽取");
+    return;
+  }
+  const reward = drawGachaReward();
+  if (!reward) {
+    await showAlert("盲盒奖池为空，请家长先配置奖池。", "无法抽取");
+    return;
+  }
+
+  captureRestorePoint("抽盲盒前");
+  state.stars -= cost;
+  addHistory(`抽取盲盒（消耗 ${cost}⭐）`, -cost, "redeem");
+
+  const gainStars = Math.max(0, Number(reward.stars || 0));
+  if (gainStars > 0) {
+    awardStars(gainStars, "bonus", `盲盒奖励：${reward.name}`);
+  } else {
+    addHistory(`盲盒奖励：${reward.name}`, 0, "system");
+  }
+  addAudit(`盲盒抽取：${reward.name}`, gainStars - cost, "system", {
+    action: "gacha_draw",
+    detail: `cost:${cost},gain:${gainStars}`,
+    actor: "child"
+  });
+
+  saveData();
+  renderAll();
+  await showAlert(`本次盲盒：${reward.name}${gainStars > 0 ? `（+${gainStars}⭐）` : ""}`, "盲盒结果");
 }
 
 async function claimWeeklyGoalChest() {
@@ -981,6 +1149,11 @@ async function claimWeeklyGoalChest() {
   } else {
     addHistory(`领取每周目标宝箱：${chestTitle}`, 0, "system");
   }
+  addAudit(`领取每周目标宝箱：${chestTitle}`, chestStars, "system", {
+    action: "claim_weekly_goal_chest",
+    detail: `week:${weekKey}`,
+    actor: "child"
+  });
   saveData();
   renderAll();
   await showAlert(`已领取「${chestTitle}」${chestStars > 0 ? `，获得 ${chestStars}⭐` : ""}。`, "领取成功");
@@ -994,6 +1167,7 @@ function removeTask(taskId) {
     if (state.completions[day] && state.completions[day][taskId]) delete state.completions[day][taskId];
   }
   if (task) addHistory(`删除任务「${task.name}」`, 0, "system");
+  if (task) addAudit(`删除任务：${task.name}`, 0, "system", { action: "delete_task" });
   if (ui.editingTaskId === taskId) clearTaskEdit();
   saveData();
   renderAll();
@@ -1004,6 +1178,7 @@ function removeReward(rewardId) {
   captureRestorePoint("删除奖励前");
   state.rewards = state.rewards.filter((item) => item.id !== rewardId);
   if (reward) addHistory(`删除奖励「${reward.name}」`, 0, "system");
+  if (reward) addAudit(`删除奖励：${reward.name}`, 0, "system", { action: "delete_reward" });
   if (ui.editingRewardId === rewardId) clearRewardEdit();
   saveData();
   renderAll();
@@ -1262,20 +1437,24 @@ function renderChildTasks() {
 function renderChildRewards() {
   childRewardList.innerHTML = "";
   for (const reward of state.rewards) {
+    const dynamicCost = getDynamicRewardCost(reward);
+    const hot = dynamicCost > reward.cost;
     const leftStock = remainingStock(reward);
     const hasStock = leftStock > 0;
     const canCooldown = canRedeemByCooldown(reward);
-    const canRedeem = state.stars >= reward.cost && hasStock && canCooldown;
+    const canRedeem = state.stars >= dynamicCost && hasStock && canCooldown;
     const stockText = Number.isFinite(reward.stock) ? ` | 本周还能换 ${leftStock} 次` : "";
     const cooldownText = Number(reward.cooldownDays || 0) > 0 ? ` | 冷却${reward.cooldownDays}天` : "";
-    const shortfallText = state.stars < reward.cost ? ` | 还差 ${reward.cost - state.stars}⭐` : " | 可兑换";
+    const shortfallText = state.stars < dynamicCost ? ` | 还差 ${dynamicCost - state.stars}⭐` : " | 可兑换";
     const resetTip = Number.isFinite(reward.stock) ? ` | 下次恢复 ${nextWeekResetLabel()}` : "";
+    const hotTag = hot ? ` <span class="hot-tag">🔥热抢 +${Math.max(0, Number(state.pricingConfig.hotMarkupPercent || 0))}%</span>` : "";
+    const priceText = hot ? `需要 ${dynamicCost}⭐（原价 ${reward.cost}⭐）` : `需要 ${reward.cost}⭐`;
     const li = document.createElement("li");
     li.className = "item";
     li.innerHTML = `
       <div>
-        <strong>${reward.name}</strong><br />
-        <small>需要 ${reward.cost}⭐${stockText}${cooldownText}${shortfallText}${resetTip}</small>
+        <strong>${reward.name}${hotTag}</strong><br />
+        <small>${priceText}${stockText}${cooldownText}${shortfallText}${resetTip}</small>
       </div>
       <button data-child-reward="${reward.id}" ${canRedeem ? "" : "disabled"}>兑换</button>
     `;
@@ -1311,17 +1490,20 @@ function renderParentTasks() {
 function renderParentRewards() {
   parentRewardList.innerHTML = "";
   for (const [index, reward] of state.rewards.entries()) {
+    const dynamicCost = getDynamicRewardCost(reward);
+    const hot = dynamicCost > reward.cost;
     const canMoveUp = index > 0;
     const canMoveDown = index < state.rewards.length - 1;
     const stockText = Number.isFinite(reward.stock) ? `每周${reward.stock}，余${remainingStock(reward)}` : "不限";
     const cooldownText = Number(reward.cooldownDays || 0) > 0 ? ` | 冷却：${reward.cooldownDays}天` : "";
     const resetTip = Number.isFinite(reward.stock) ? ` | 恢复：${nextWeekResetLabel()}` : "";
+    const hotText = hot ? ` | 当前热抢价：${dynamicCost}⭐` : "";
     const li = document.createElement("li");
     li.className = "item";
     li.innerHTML = `
       <div>
         <strong>${index + 1}. ${reward.name}</strong><br />
-        <small>兑换值：${reward.cost}⭐ | 库存：${stockText}${cooldownText}${resetTip}</small>
+        <small>兑换值：${reward.cost}⭐ | 库存：${stockText}${hotText}${cooldownText}${resetTip}</small>
       </div>
       <div class="task-actions">
         <div class="rate-buttons">
@@ -1410,6 +1592,8 @@ function renderHistory(target, filter) {
   if (filter === "today") {
     const today = todayKey();
     list = state.history.filter((item) => toDateKeyFromHistory(item) === today);
+  } else if (filter === "audit") {
+    list = state.history.filter((item) => Boolean(item.audit));
   } else if (filter !== "all") {
     list = state.history.filter((item) => item.type === filter);
   }
@@ -1440,7 +1624,9 @@ function renderHistory(target, filter) {
     const cls = item.delta >= 0 ? "plus" : "minus";
     const sign = item.delta >= 0 ? "+" : "";
     const deltaText = item.delta !== 0 ? ` <span class="${cls}">${sign}${item.delta}⭐</span>` : "";
-    li.innerHTML = `<strong>${item.text}</strong>${deltaText}<br /><small>${item.at}</small>`;
+    const actorLabel = item.actor === "parent" ? "家长" : item.actor === "child" ? "孩子" : "系统";
+    const auditTag = item.audit ? "<span class=\"audit-tag\">审计</span>" : "";
+    li.innerHTML = `<strong>${item.text}</strong>${deltaText} ${auditTag}<br /><small>${item.at} · ${actorLabel}</small>`;
     target.appendChild(li);
   }
 }
@@ -1766,11 +1952,15 @@ async function showAuthError(message, title) {
 function renderAll() {
   applyTimezoneConfig();
   const activeElement = document.activeElement;
-  const activeInputState = activeElement instanceof HTMLInputElement && activeElement.id
+  const isFocusableField =
+    activeElement instanceof HTMLInputElement ||
+    activeElement instanceof HTMLTextAreaElement ||
+    activeElement instanceof HTMLSelectElement;
+  const activeInputState = isFocusableField && activeElement.id
     ? {
       id: activeElement.id,
-      start: activeElement.selectionStart,
-      end: activeElement.selectionEnd
+      start: "selectionStart" in activeElement ? activeElement.selectionStart : null,
+      end: "selectionEnd" in activeElement ? activeElement.selectionEnd : null
     }
     : null;
   const starsChanged = lastRenderedStars !== state.stars;
@@ -1820,6 +2010,20 @@ function renderAll() {
   if (bonusLimitText) {
     bonusLimitText.textContent = `本周额外奖励剩余：${getBonusRemainThisWeek()}⭐（每周上限 ${state.bonusConfig.weeklyLimit}⭐）`;
   }
+  if (hotStockThresholdInput) hotStockThresholdInput.value = String(Math.max(1, Number(state.pricingConfig.hotStockThreshold || 1)));
+  if (hotMarkupPercentInput) hotMarkupPercentInput.value = String(Math.max(0, Number(state.pricingConfig.hotMarkupPercent || 0)));
+  if (gachaCostInput) gachaCostInput.value = String(Math.max(1, Number(state.gachaConfig.cost || 5)));
+  if (gachaEnabledToggle) gachaEnabledToggle.checked = Boolean(state.gachaConfig.enabled);
+  if (gachaPoolInput) gachaPoolInput.value = gachaPoolToText();
+  if (gachaPoolSummary) {
+    const poolCount = Array.isArray(state.gachaConfig.pool) ? state.gachaConfig.pool.length : 0;
+    gachaPoolSummary.textContent = `当前盲盒奖池：${poolCount} 项 | 消耗 ${state.gachaConfig.cost}⭐`;
+  }
+  if (gachaBoxWrap && gachaHintText && gachaDrawBtn) {
+    gachaBoxWrap.classList.toggle("hidden", !state.gachaConfig.enabled);
+    gachaHintText.textContent = `盲盒：每次消耗 ${state.gachaConfig.cost}⭐，随机奖励`;
+    gachaDrawBtn.disabled = state.stars < Number(state.gachaConfig.cost || 0);
+  }
   renderAuthStatus();
   renderSyncStatus();
   renderRole();
@@ -1850,9 +2054,13 @@ function renderAll() {
 
   if (activeInputState) {
     const nextActive = document.getElementById(activeInputState.id);
-    if (nextActive instanceof HTMLInputElement) {
+    if (nextActive instanceof HTMLInputElement || nextActive instanceof HTMLTextAreaElement || nextActive instanceof HTMLSelectElement) {
       nextActive.focus({ preventScroll: true });
-      if (typeof activeInputState.start === "number" && typeof activeInputState.end === "number") {
+      if (
+        "setSelectionRange" in nextActive &&
+        typeof activeInputState.start === "number" &&
+        typeof activeInputState.end === "number"
+      ) {
         nextActive.setSelectionRange(activeInputState.start, activeInputState.end);
       }
     }
@@ -2067,9 +2275,11 @@ taskForm.addEventListener("submit", (event) => {
     task.stars = stars;
     task.needProof = Boolean(taskNeedProof.checked);
     addHistory(`修改任务「${name}」`, 0, "system");
+    addAudit(`修改任务：${name}`, 0, "system", { action: "update_task" });
   } else {
     state.tasks.push({ id: crypto.randomUUID(), name, stars, needProof: Boolean(taskNeedProof.checked) });
     addHistory(`新增任务「${name}」`, 0, "system");
+    addAudit(`新增任务：${name}`, 0, "system", { action: "create_task" });
   }
 
   clearTaskEdit();
@@ -2098,15 +2308,75 @@ rewardForm.addEventListener("submit", (event) => {
     reward.stock = stock;
     reward.cooldownDays = cooldownDays;
     addHistory(`修改奖励「${name}」`, 0, "system");
+    addAudit(`修改奖励：${name}`, 0, "system", { action: "update_reward" });
   } else {
     state.rewards.push({ id: crypto.randomUUID(), name, cost, stock, cooldownDays });
     addHistory(`新增奖励「${name}」`, 0, "system");
+    addAudit(`新增奖励：${name}`, 0, "system", { action: "create_reward" });
   }
 
   clearRewardEdit();
   saveData();
   renderAll();
 });
+
+if (dynamicPricingForm) {
+  dynamicPricingForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const threshold = Number(hotStockThresholdInput?.value || 1);
+    const markup = Number(hotMarkupPercentInput?.value || 0);
+    if (!Number.isFinite(threshold) || threshold < 1) return;
+    if (!Number.isFinite(markup) || markup < 0) return;
+    captureRestorePoint("修改热抢规则前");
+    state.pricingConfig.hotStockThreshold = Math.round(threshold);
+    state.pricingConfig.hotMarkupPercent = Math.round(markup);
+    addHistory(`已更新热抢规则：剩余<=${state.pricingConfig.hotStockThreshold} 时加价 ${state.pricingConfig.hotMarkupPercent}%`, 0, "system");
+    addAudit("更新热抢动态定价规则", 0, "system", {
+      action: "update_dynamic_pricing",
+      detail: `threshold:${state.pricingConfig.hotStockThreshold},markup:${state.pricingConfig.hotMarkupPercent}`
+    });
+    saveData();
+    renderAll();
+  });
+}
+
+if (gachaConfigForm) {
+  gachaConfigForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const cost = Number(gachaCostInput?.value || 0);
+    if (!Number.isFinite(cost) || cost < 1) return;
+    captureRestorePoint("修改盲盒消耗前");
+    state.gachaConfig.cost = Math.round(cost);
+    state.gachaConfig.enabled = Boolean(gachaEnabledToggle?.checked);
+    addHistory(`已更新盲盒消耗：${state.gachaConfig.cost}⭐`, 0, "system");
+    addAudit("更新盲盒基础配置", 0, "system", {
+      action: "update_gacha_config",
+      detail: `enabled:${state.gachaConfig.enabled},cost:${state.gachaConfig.cost}`
+    });
+    saveData();
+    renderAll();
+  });
+}
+
+if (saveGachaPoolBtn) {
+  saveGachaPoolBtn.addEventListener("click", async () => {
+    const parsed = parseGachaPoolText(gachaPoolInput?.value || "");
+    if (!parsed.length) {
+      await showAlert("盲盒奖池不能为空，请至少填写一行。", "保存失败");
+      return;
+    }
+    captureRestorePoint("修改盲盒奖池前");
+    state.gachaConfig.pool = parsed;
+    state.gachaConfig.enabled = Boolean(gachaEnabledToggle?.checked);
+    addHistory(`已更新盲盒奖池：${parsed.length} 项`, 0, "system");
+    addAudit("更新盲盒奖池", 0, "system", {
+      action: "update_gacha_pool",
+      detail: `size:${parsed.length}`
+    });
+    saveData();
+    renderAll();
+  });
+}
 
 bonusForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -2278,6 +2548,12 @@ makeupCheckinBtn.addEventListener("click", () => {
 if (claimGoalChestBtn) {
   claimGoalChestBtn.addEventListener("click", () => {
     claimWeeklyGoalChest();
+  });
+}
+
+if (gachaDrawBtn) {
+  gachaDrawBtn.addEventListener("click", () => {
+    playGachaByChild();
   });
 }
 
@@ -2489,13 +2765,16 @@ exportBtn.addEventListener("click", () => {
 });
 
 exportCsvBtn.addEventListener("click", () => {
-  const rows = [["日期", "类型", "内容", "星星变化"]];
+  const rows = [["日期", "类型", "内容", "星星变化", "操作者", "审计动作", "审计标记"]];
   for (const item of state.history) {
     rows.push([
       item.dateKey || "",
       item.type || "system",
       String(item.text || "").replaceAll('"', '""'),
-      String(item.delta || 0)
+      String(item.delta || 0),
+      item.actor || "",
+      item.action || "",
+      item.audit ? "Y" : ""
     ]);
   }
   const csv = rows
