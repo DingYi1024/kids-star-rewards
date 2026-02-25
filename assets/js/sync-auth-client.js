@@ -152,7 +152,8 @@
 
         return {
           ok: true,
-          message: "已保存到服务器"
+          message: "已保存到服务器",
+          version: typeof result.version === "number" ? result.version : undefined
         };
       },
       async pull() {

@@ -594,24 +594,37 @@ async function flushAutoSync() {
   }
   if (!state.serverSync?.autoPush || !authState.token) return;
 
+  const localSnapshot = createSnapshotData();
   autoSyncRunning = true;
-  const result = await syncAdapter.push();
+  const result = await syncAdapter.push(localSnapshot);
   state.serverSync.lastSyncAt = Date.now();
 
   if (result.conflict) {
     if (typeof result.serverVersion === "number") {
       state.serverSync.version = result.serverVersion;
     }
-    state.serverSync.lastSyncStatus = "检测到其他设备更新，已切换到最新数据";
+    state.serverSync.lastSyncStatus = "检测到多端同时修改，正在自动合并";
     const pulled = await syncAdapter.pull();
     if (pulled.ok && pulled.data) {
-      applyPulledServerData(pulled.data, {
-        captureLabel: "冲突覆盖前自动保存",
-        successStatus: "已同步最新数据（本地需重做刚才修改）",
-        historyText: "检测到多端同时修改，已切换到服务器最新版本",
-        version: pulled.version
-      });
-      showActionToast("检测到多端冲突，已同步服务器最新数据");
+      const mergedData = mergeStatesForConflict(pulled.data, localSnapshot);
+      const mergePush = await syncAdapter.push(mergedData);
+      if (mergePush.ok) {
+        applyPulledServerData(mergedData, {
+          captureLabel: "冲突自动合并前",
+          successStatus: "冲突已自动合并并保存",
+          historyText: "检测到多端同时修改，已自动合并",
+          version: mergePush.version
+        });
+        showActionToast("多端冲突已自动合并");
+      } else {
+        applyPulledServerData(pulled.data, {
+          captureLabel: "冲突回退前",
+          successStatus: "检测到冲突，已切换服务器最新版本",
+          historyText: "多端冲突自动合并失败，已采用服务器最新版本",
+          version: pulled.version
+        });
+        showActionToast("冲突合并失败，已切换服务器版本");
+      }
     }
   } else {
     state.serverSync.lastSyncStatus = result.ok ? "自动保存成功" : "自动保存失败";
@@ -2118,6 +2131,98 @@ function applyPulledServerData(serverData, options = {}) {
   if (historyText) addHistory(historyText, 0, "system");
   saveData({ markPending: false });
   renderAll();
+}
+
+function mergeByIdList(serverList = [], localList = []) {
+  const map = new Map();
+  for (const item of serverList) {
+    if (!item?.id) continue;
+    map.set(item.id, { ...item });
+  }
+  for (const item of localList) {
+    if (!item?.id) continue;
+    map.set(item.id, { ...item });
+  }
+  return Array.from(map.values());
+}
+
+function mergeCompletions(serverCompletions = {}, localCompletions = {}) {
+  const rank = { pending: 1, rejected: 2, rated: 3 };
+  const merged = structuredClone(serverCompletions || {});
+  for (const [day, localDayMap] of Object.entries(localCompletions || {})) {
+    if (!merged[day]) merged[day] = {};
+    for (const [taskId, localItem] of Object.entries(localDayMap || {})) {
+      const serverItem = merged[day][taskId];
+      if (!serverItem) {
+        merged[day][taskId] = { ...localItem };
+        continue;
+      }
+      const serverRank = rank[String(serverItem.state || "")] || 0;
+      const localRank = rank[String(localItem.state || "")] || 0;
+      merged[day][taskId] = localRank >= serverRank ? { ...localItem } : { ...serverItem };
+    }
+  }
+  return merged;
+}
+
+function mergeHistory(serverHistory = [], localHistory = []) {
+  const seen = new Set();
+  const list = [];
+  for (const item of [...localHistory, ...serverHistory]) {
+    if (!item?.id || seen.has(item.id)) continue;
+    seen.add(item.id);
+    list.push({ ...item });
+  }
+  return list.slice(0, 180);
+}
+
+function mergeRedeemLog(serverRedeem = [], localRedeem = []) {
+  const seen = new Set();
+  const list = [];
+  for (const item of [...localRedeem, ...serverRedeem]) {
+    const key = `${item?.rewardId || ""}|${item?.day || ""}`;
+    if (!item?.rewardId || !item?.day || seen.has(key)) continue;
+    seen.add(key);
+    list.push({ ...item });
+  }
+  return list.slice(0, 300);
+}
+
+function mergeStatesForConflict(serverData, localData) {
+  const merged = { ...structuredClone(defaultData), ...structuredClone(serverData || {}) };
+  const local = { ...structuredClone(defaultData), ...structuredClone(localData || {}) };
+
+  merged.tasks = mergeByIdList(merged.tasks, local.tasks);
+  merged.rewards = mergeByIdList(merged.rewards, local.rewards);
+  merged.completions = mergeCompletions(merged.completions, local.completions);
+  merged.history = mergeHistory(merged.history, local.history);
+  merged.redeemLog = mergeRedeemLog(merged.redeemLog, local.redeemLog);
+
+  merged.earningsByDay = { ...(merged.earningsByDay || {}), ...(local.earningsByDay || {}) };
+  merged.rewardWeeklyUsage = { ...(merged.rewardWeeklyUsage || {}), ...(local.rewardWeeklyUsage || {}) };
+  merged.makeupUsageByWeek = { ...(merged.makeupUsageByWeek || {}), ...(local.makeupUsageByWeek || {}) };
+  merged.makeupCardGrantByWeek = { ...(merged.makeupCardGrantByWeek || {}), ...(local.makeupCardGrantByWeek || {}) };
+  merged.bonusUsageByWeek = { ...(merged.bonusUsageByWeek || {}), ...(local.bonusUsageByWeek || {}) };
+
+  const serverIds = new Set((serverData?.history || []).map((item) => item?.id).filter(Boolean));
+  const localOnlyDelta = (local.history || [])
+    .filter((item) => item?.id && !serverIds.has(item.id))
+    .reduce((sum, item) => sum + Number(item.delta || 0), 0);
+  merged.stars = Math.max(0, Number(merged.stars || 0) + localOnlyDelta);
+
+  merged.weeklyGoal = local.weeklyGoal;
+  merged.weeklyGoalChest = local.weeklyGoalChest;
+  merged.weeklyGoalChestClaimedByWeek = { ...(merged.weeklyGoalChestClaimedByWeek || {}), ...(local.weeklyGoalChestClaimedByWeek || {}) };
+  merged.bank = local.bank;
+  merged.bankConfig = local.bankConfig;
+  merged.timeConfig = local.timeConfig;
+  merged.pricingConfig = local.pricingConfig;
+  merged.gachaConfig = local.gachaConfig;
+  merged.makeupConfig = local.makeupConfig;
+  merged.bonusConfig = local.bonusConfig;
+  merged.theme = local.theme;
+
+  return merged;
 }
 
 function renderAuthStatus() {
