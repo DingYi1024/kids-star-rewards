@@ -1631,26 +1631,38 @@ button:disabled {
 
 .action-toast {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  left: 50%;
+  top: 82px;
+  transform: translateX(-50%) translateY(-10px) scale(0.98);
   z-index: 1400;
-  max-width: min(88vw, 380px);
-  padding: 10px 12px;
-  border-radius: 12px;
+  min-width: 240px;
+  max-width: min(92vw, 560px);
+  padding: 12px 16px;
+  border-radius: 14px;
   border: 1px solid #d7e8cd;
   background: linear-gradient(120deg, #f7fff2, #eefde7);
   color: #336024;
-  font-weight: 700;
-  box-shadow: 0 10px 24px rgba(35, 72, 22, 0.18);
+  font-weight: 800;
+  font-size: 0.96rem;
+  letter-spacing: 0.2px;
+  text-align: center;
+  box-shadow: 0 14px 30px rgba(35, 72, 22, 0.24);
   opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition: opacity 220ms ease, transform 220ms ease;
   pointer-events: none;
 }
 
 .action-toast.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+@media (max-width: 860px) {
+  .action-toast {
+    top: 72px;
+    min-width: 0;
+    width: min(94vw, 560px);
+  }
 }
 
 body.reduce-motion *,

@@ -571,14 +571,14 @@ let toastTimer = null;
 
 function showActionToast(message) {
   if (!actionToast || !message) return;
-  actionToast.textContent = message;
+  actionToast.textContent = `✅ ${message}`;
   actionToast.classList.remove("hidden");
   actionToast.classList.add("show");
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     actionToast.classList.remove("show");
-    setTimeout(() => actionToast.classList.add("hidden"), 180);
-  }, 1200);
+    setTimeout(() => actionToast.classList.add("hidden"), 220);
+  }, 1850);
 }
 
 async function flushAutoSync() {
