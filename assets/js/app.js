@@ -1530,9 +1530,9 @@ function setAuthMode(mode) {
   if (authSwitchBtn) authSwitchBtn.textContent = isRegister ? "去登录" : "去注册";
 }
 
-function openAuthModal() {
+function openAuthModal(mode = "login") {
   if (!authModal) return;
-  setAuthMode("login");
+  setAuthMode(mode);
   authModal.classList.remove("hidden");
   if (authUsernameInput) authUsernameInput.focus();
 }
@@ -1541,6 +1541,15 @@ function closeAuthModal() {
   if (!authModal) return;
   authModal.classList.add("hidden");
   if (authPasswordInput) authPasswordInput.value = "";
+}
+
+async function showAuthError(message, title) {
+  const currentMode = ui.authMode;
+  const currentUsername = String(authUsernameInput?.value || "");
+  closeAuthModal();
+  await showAlert(message, title);
+  openAuthModal(currentMode);
+  if (authUsernameInput) authUsernameInput.value = currentUsername;
 }
 
 function renderAll() {
@@ -1903,13 +1912,13 @@ async function submitAuth() {
 
   if (isRegister) {
     if (username.length < 3 || password.length < 6) {
-      await showAlert("用户名至少3位，密码至少6位。", "注册失败");
+      await showAuthError("用户名至少3位，密码至少6位。", "注册失败");
       return;
     }
 
     const registerResult = await registerAccount(username, password);
     if (!registerResult.ok) {
-      await showAlert(registerResult.message, "注册失败");
+      await showAuthError(registerResult.message, "注册失败");
       return;
     }
 
@@ -1924,13 +1933,13 @@ async function submitAuth() {
   }
 
   if (!username || !password) {
-    await showAlert("请输入用户名和密码。", "登录失败");
+    await showAuthError("请输入用户名和密码。", "登录失败");
     return;
   }
 
   const loginResult = await loginAccount(username, password);
   if (!loginResult.ok) {
-    await showAlert(loginResult.message, "登录失败");
+    await showAuthError(loginResult.message, "登录失败");
     return;
   }
 
