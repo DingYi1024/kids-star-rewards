@@ -15,8 +15,9 @@ const feedbackByRating = {
 
 const defaultData = {
   stars: 0,
+  streakEnabled: true,
   weeklyGoal: 20,
-  openStreakCount: 1,
+  openStreakCount: 0,
   openStreakLastDay: "",
   streakMilestoneAwardDays: {},
   earningsByDay: {},
@@ -33,9 +34,13 @@ const defaultData = {
   makeupConfig: {
     weeklyLimit: 1,
     windowDays: 1,
-    countForMilestone: false
+    countForMilestone: false,
+    weeklyCardGrant: 1
   },
   makeupUsageByWeek: {},
+  makeupDays: {},
+  makeupCardBalance: 0,
+  makeupCardGrantByWeek: {},
   theme: "sunny",
   restorePoints: [],
   tasks: [
@@ -86,8 +91,9 @@ function normalizeDataShape() {
   if (!state.completions || typeof state.completions !== "object") state.completions = {};
   if (!state.earningsByDay || typeof state.earningsByDay !== "object") state.earningsByDay = {};
   if (!Array.isArray(state.history)) state.history = [];
+  if (typeof state.streakEnabled !== "boolean") state.streakEnabled = true;
   if (typeof state.weeklyGoal !== "number" || state.weeklyGoal < 5) state.weeklyGoal = 20;
-  if (typeof state.openStreakCount !== "number" || state.openStreakCount < 1) state.openStreakCount = 1;
+  if (typeof state.openStreakCount !== "number" || state.openStreakCount < 0) state.openStreakCount = 0;
   if (typeof state.openStreakLastDay !== "string") state.openStreakLastDay = "";
   if (!state.streakMilestoneAwardDays || typeof state.streakMilestoneAwardDays !== "object") state.streakMilestoneAwardDays = {};
   if (!state.rewardWeeklyUsage || typeof state.rewardWeeklyUsage !== "object") state.rewardWeeklyUsage = {};
@@ -101,14 +107,18 @@ function normalizeDataShape() {
   if (!state.checkinDays || typeof state.checkinDays !== "object") state.checkinDays = {};
   if (!Array.isArray(state.ratingUndoStack)) state.ratingUndoStack = [];
   if (!state.makeupConfig || typeof state.makeupConfig !== "object") {
-    state.makeupConfig = { weeklyLimit: 1, windowDays: 1, countForMilestone: false };
+    state.makeupConfig = { weeklyLimit: 1, windowDays: 1, countForMilestone: false, weeklyCardGrant: 1 };
   }
   if (!state.makeupUsageByWeek || typeof state.makeupUsageByWeek !== "object") state.makeupUsageByWeek = {};
+  if (!state.makeupDays || typeof state.makeupDays !== "object") state.makeupDays = {};
+  if (typeof state.makeupCardBalance !== "number" || state.makeupCardBalance < 0) state.makeupCardBalance = 0;
+  if (!state.makeupCardGrantByWeek || typeof state.makeupCardGrantByWeek !== "object") state.makeupCardGrantByWeek = {};
   if (!Array.isArray(state.restorePoints)) state.restorePoints = [];
   if (typeof state.theme !== "string") state.theme = "sunny";
-  state.makeupConfig.weeklyLimit = Math.max(0, Number(state.makeupConfig.weeklyLimit || 1));
-  state.makeupConfig.windowDays = Math.max(1, Number(state.makeupConfig.windowDays || 1));
+  state.makeupConfig.weeklyLimit = Math.max(0, Number(state.makeupConfig.weeklyLimit ?? 1));
+  state.makeupConfig.windowDays = Math.max(1, Number(state.makeupConfig.windowDays ?? 1));
   state.makeupConfig.countForMilestone = Boolean(state.makeupConfig.countForMilestone);
+  state.makeupConfig.weeklyCardGrant = Math.max(0, Number(state.makeupConfig.weeklyCardGrant ?? 1));
 
   state.tasks = (state.tasks || []).map((task) => ({ needProof: false, ...task }));
   state.rewards = (state.rewards || []).map((reward) => ({ stock: null, cooldownDays: 0, ...reward }));
@@ -206,17 +216,26 @@ const themeSelect = document.querySelector("#themeSelect");
 const childPanel = document.querySelector("#childPanel");
 const parentPanel = document.querySelector("#parentPanel");
 const todayDateText = document.querySelector("#todayDateText");
+const childTopGrid = document.querySelector("#childTopGrid");
+const childStreakCard = document.querySelector("#childStreakCard");
 
 const childStarCount = document.querySelector("#childStarCount");
 const openStreakText = document.querySelector("#openStreakText");
 const streakHintText = document.querySelector("#streakHintText");
 const makeupInfoText = document.querySelector("#makeupInfoText");
+const toggleStreakDetailsBtn = document.querySelector("#toggleStreakDetailsBtn");
+const streakDetailPanel = document.querySelector("#streakDetailPanel");
 const makeupCheckinBtn = document.querySelector("#makeupCheckinBtn");
+const monthCheckinText = document.querySelector("#monthCheckinText");
+const monthMakeupText = document.querySelector("#monthMakeupText");
+const lifetimeCheckinText = document.querySelector("#lifetimeCheckinText");
+const streakMonthHistory = document.querySelector("#streakMonthHistory");
+const streakHeatmap = document.querySelector("#streakHeatmap");
+const toggleStreakHeatmapBtn = document.querySelector("#toggleStreakHeatmapBtn");
 const parentStarCount = document.querySelector("#parentStarCount");
 const weeklyGoalText = document.querySelector("#weeklyGoalText");
 const weeklyGoalBar = document.querySelector("#weeklyGoalBar");
 const goalMotivateText = document.querySelector("#goalMotivateText");
-const milestoneRow = document.querySelector("#milestoneRow");
 
 const childTaskList = document.querySelector("#childTaskList");
 const childRewardList = document.querySelector("#childRewardList");
@@ -255,11 +274,18 @@ const pinGraceForm = document.querySelector("#pinGraceForm");
 const pinGraceInput = document.querySelector("#pinGraceInput");
 const soundToggle = document.querySelector("#soundToggle");
 const reduceMotionToggle = document.querySelector("#reduceMotionToggle");
+const streakFeatureToggle = document.querySelector("#streakFeatureToggle");
 const syncStatusText = document.querySelector("#syncStatusText");
 const syncCheckBtn = document.querySelector("#syncCheckBtn");
 const makeupConfigForm = document.querySelector("#makeupConfigForm");
 const makeupWeeklyLimitInput = document.querySelector("#makeupWeeklyLimitInput");
+const makeupCardWeeklyForm = document.querySelector("#makeupCardWeeklyForm");
+const makeupCardWeeklyInput = document.querySelector("#makeupCardWeeklyInput");
+const makeupCardGrantForm = document.querySelector("#makeupCardGrantForm");
+const makeupCardGrantInput = document.querySelector("#makeupCardGrantInput");
 const makeupCountMilestoneToggle = document.querySelector("#makeupCountMilestoneToggle");
+const makeupRuleSummary = document.querySelector("#makeupRuleSummary");
+const makeupSettingsCol = document.querySelector("#makeupSettingsCol");
 
 const parentPendingList = document.querySelector("#parentPendingList");
 const pendingSearchInput = document.querySelector("#pendingSearchInput");
@@ -302,7 +328,9 @@ const ui = {
   editingRewardId: null,
   pendingRedeemId: null,
   pinFailCount: 0,
-  uiModalResolver: null
+  uiModalResolver: null,
+  streakDetailsExpanded: false,
+  streakHeatmapExpanded: false
 };
 
 let lastRenderedStars = state.stars;
@@ -312,7 +340,11 @@ if (state.pinEnabled && ui.role === "parent") {
 }
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function formatTodayLabel() {
@@ -326,15 +358,33 @@ function formatTodayLabel() {
 
 function weekStartKey(dateKey = todayKey()) {
   const date = new Date(`${dateKey}T00:00:00`);
-  const day = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() - day + 1);
-  return date.toISOString().slice(0, 10);
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function shiftDay(dateKey, deltaDays) {
   const date = new Date(`${dateKey}T00:00:00`);
-  date.setUTCDate(date.getUTCDate() + deltaDays);
-  return date.toISOString().slice(0, 10);
+  date.setDate(date.getDate() + deltaDays);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function buildMonthKey(year, monthIndex) {
+  return `${year}-${pad2(monthIndex + 1)}`;
+}
+
+function buildDayKey(year, monthIndex, day) {
+  return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
 }
 
 function weeklyEarned() {
@@ -376,6 +426,24 @@ function getMakeupUsageMap(weekKey) {
 function getMakeupRemainThisWeek() {
   const usage = getMakeupUsageMap(weekStartKey());
   return Math.max(0, Number(state.makeupConfig.weeklyLimit || 0) - Number(usage.count || 0));
+}
+
+function grantMakeupCards(count, reason) {
+  const grantCount = Math.max(0, Number(count || 0));
+  if (!grantCount) return;
+  state.makeupCardBalance = Number(state.makeupCardBalance || 0) + grantCount;
+  addHistory(`${reason}，获得补签卡 ${grantCount} 张`, 0, "system");
+}
+
+function ensureWeeklyMakeupCardGrant() {
+  const weekKey = weekStartKey();
+  if (state.makeupCardGrantByWeek[weekKey]) return false;
+  state.makeupCardGrantByWeek[weekKey] = true;
+  const weeklyGrant = Math.max(0, Number(state.makeupConfig.weeklyCardGrant || 0));
+  if (weeklyGrant > 0) {
+    grantMakeupCards(weeklyGrant, `本周补签卡发放（${weekKey}）`);
+  }
+  return true;
 }
 
 function calculateStreakEnding(dateKey) {
@@ -445,12 +513,19 @@ function playSound(type) {
 function applyMilestoneAward(day, allowAward) {
   if (!allowAward) return;
   const bonusByMilestone = { 3: 1, 7: 2, 14: 4 };
+  const makeupCardBonusByMilestone = { 7: 1, 14: 1, 21: 2 };
   const streak = state.openStreakCount;
   const bonus = bonusByMilestone[streak];
+  const makeupCardBonus = Number(makeupCardBonusByMilestone[streak] || 0);
   const awardKey = `${day}-${streak}`;
-  if (bonus && !state.streakMilestoneAwardDays[awardKey]) {
+  if ((bonus || makeupCardBonus) && !state.streakMilestoneAwardDays[awardKey]) {
     state.streakMilestoneAwardDays[awardKey] = true;
-    awardStars(bonus, "system", `连续打卡 ${streak} 天奖励`);
+    if (bonus) {
+      awardStars(bonus, "system", `连续打卡 ${streak} 天奖励`);
+    }
+    if (makeupCardBonus > 0) {
+      grantMakeupCards(makeupCardBonus, `连续打卡 ${streak} 天奖励`);
+    }
     addHistory(`连胜里程碑达成：${streak} 天`, 0, "system");
     playSound("good");
   }
@@ -477,11 +552,18 @@ function refreshStreakFromCheckins() {
     state.openStreakCount = calculateStreakEnding(targetDay);
   } else {
     state.openStreakLastDay = "";
-    state.openStreakCount = 1;
+    state.openStreakCount = 0;
   }
 }
 
 async function tryUseMakeupCard() {
+  ensureWeeklyMakeupCardGrant();
+  const cardBalance = Number(state.makeupCardBalance || 0);
+  if (cardBalance <= 0) {
+    await showAlert("当前没有补签卡，请先获得补签卡后再使用。", "补签不可用");
+    return;
+  }
+
   const remain = getMakeupRemainThisWeek();
   if (remain <= 0) {
     await showAlert("本周补签次数已用完。", "补签不可用");
@@ -500,7 +582,9 @@ async function tryUseMakeupCard() {
   captureRestorePoint("补签前");
   const usage = getMakeupUsageMap(weekStartKey());
   usage.count = Number(usage.count || 0) + 1;
+  state.makeupCardBalance = Math.max(0, Number(state.makeupCardBalance || 0) - 1);
   state.checkinDays[makeupDay] = true;
+  state.makeupDays[makeupDay] = true;
   state.openStreakCount = calculateStreakEnding(todayKey());
   state.openStreakLastDay = todayKey();
   applyMilestoneAward(makeupDay, Boolean(state.makeupConfig.countForMilestone));
@@ -727,25 +811,20 @@ function renderWeeklyGoal() {
   } else {
     goalMotivateText.textContent = `再拿 ${left}⭐，解锁本周目标宝箱！`;
   }
-
-  const marks = [Math.ceil(goal * 0.3), Math.ceil(goal * 0.6), goal];
-  milestoneRow.innerHTML = "";
-  for (const mark of marks) {
-    const chip = document.createElement("span");
-    chip.className = `milestone-chip ${earned >= mark ? "done" : ""}`;
-    chip.textContent = earned >= mark ? `已达成 ${mark}⭐` : `目标 ${mark}⭐`;
-    milestoneRow.appendChild(chip);
-  }
 }
 
 function renderStreak() {
   const streak = state.openStreakCount;
-  let title = "打卡新手";
+  let title = "准备出发";
   const milestones = [3, 7, 14, 21];
   const nextMilestone = milestones.find((item) => item > streak);
   let hint = nextMilestone
     ? `再打卡 ${nextMilestone - streak} 天，可解锁 ${nextMilestone} 天奖励！`
     : "你已经突破所有里程碑，继续冲刺吧！";
+
+  if (streak <= 0) {
+    hint = "今天完成第一项任务并提交，就能点亮连续打卡。";
+  }
 
   if (streak >= 3) title = "坚持达人";
   if (streak >= 7) title = "超级连胜";
@@ -757,10 +836,121 @@ function renderStreak() {
   openStreakText.textContent = `连续打卡 ${streak} 天 · ${title}`;
   streakHintText.textContent = hint;
 
+  if (toggleStreakDetailsBtn) {
+    toggleStreakDetailsBtn.textContent = ui.streakDetailsExpanded ? "收起打卡详情" : "展开打卡详情";
+  }
+  if (streakDetailPanel) {
+    streakDetailPanel.classList.toggle("hidden", !ui.streakDetailsExpanded);
+  }
+
+  ensureWeeklyMakeupCardGrant();
   const remain = getMakeupRemainThisWeek();
-  makeupInfoText.textContent = `本周补签剩余 ${remain} 次（仅可补昨天）`;
-  const canShowMakeup = remain > 0 && Boolean(findMakeupDay());
-  makeupCheckinBtn.classList.toggle("hidden", !canShowMakeup);
+  const cardBalance = Number(state.makeupCardBalance || 0);
+  if (cardBalance <= 0) {
+    makeupInfoText.textContent = `补签卡 0 张 | 可通过连续打卡里程碑或家长奖励获得（每周自动发卡 ${state.makeupConfig.weeklyCardGrant || 0} 张）`;
+  } else {
+    makeupInfoText.textContent = `补签卡 ${cardBalance} 张 | 本周补签剩余 ${remain} 次（仅可补昨天）`;
+  }
+  const makeupDay = findMakeupDay();
+  const canUseMakeup = remain > 0 && cardBalance > 0 && Boolean(makeupDay);
+  makeupCheckinBtn.textContent = "使用补签卡";
+  makeupCheckinBtn.disabled = false;
+  makeupCheckinBtn.classList.toggle("hidden", !canUseMakeup);
+
+  const allCheckinDays = Object.keys(state.checkinDays)
+    .filter((day) => state.checkinDays[day])
+    .sort((a, b) => b.localeCompare(a));
+  const currentMonth = todayKey().slice(0, 7);
+  const monthCheckins = allCheckinDays.filter((day) => day.startsWith(currentMonth));
+  const monthMakeups = monthCheckins.filter((day) => Boolean(state.makeupDays[day]));
+
+  if (monthCheckinText) monthCheckinText.textContent = `本月打卡：${monthCheckins.length} 天`;
+  if (monthMakeupText) monthMakeupText.textContent = `本月补签：${monthMakeups.length} 天`;
+  if (lifetimeCheckinText) lifetimeCheckinText.textContent = `累计打卡：${allCheckinDays.length} 天`;
+
+  if (streakMonthHistory) {
+    const byMonth = {};
+    for (const day of allCheckinDays) {
+      const monthKey = day.slice(0, 7);
+      if (!byMonth[monthKey]) byMonth[monthKey] = { checkins: 0, makeups: 0 };
+      byMonth[monthKey].checkins += 1;
+      if (state.makeupDays[day]) byMonth[monthKey].makeups += 1;
+    }
+
+    const monthRows = Object.entries(byMonth)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .slice(0, 4);
+
+    streakMonthHistory.innerHTML = "";
+    if (!monthRows.length) {
+      const li = document.createElement("li");
+      li.textContent = "暂无月度打卡记录";
+      streakMonthHistory.appendChild(li);
+    } else {
+      for (const [month, info] of monthRows) {
+        const li = document.createElement("li");
+        const label = month === currentMonth ? `${month}（本月）` : month;
+        li.innerHTML = `<strong>${label}</strong><small>打卡 ${info.checkins} 天 | 补签 ${info.makeups} 天</small>`;
+        streakMonthHistory.appendChild(li);
+      }
+    }
+  }
+
+  if (streakHeatmap) {
+    const today = new Date();
+    const todayStr = todayKey();
+    const cards = [];
+
+    for (let offset = 0; offset < 3; offset += 1) {
+      const monthDate = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+      const year = monthDate.getFullYear();
+      const monthIndex = monthDate.getMonth();
+      const monthKey = buildMonthKey(year, monthIndex);
+      const monthLabel = `${monthKey}${offset === 0 ? "（本月）" : ""}`;
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const startWeekday = new Date(year, monthIndex, 1).getDay();
+
+      let monthDone = 0;
+      let monthMakeup = 0;
+      const cells = [];
+
+      for (let i = 0; i < startWeekday; i += 1) {
+        cells.push('<span class="heat-cell empty"></span>');
+      }
+
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const dayKey = buildDayKey(year, monthIndex, day);
+        const isDone = Boolean(state.checkinDays[dayKey]);
+        const isMakeup = Boolean(state.makeupDays[dayKey]);
+        const isToday = dayKey === todayStr;
+        let cls = "none";
+        if (isDone && isMakeup) cls = "makeup";
+        else if (isDone) cls = "done";
+        if (isDone) monthDone += 1;
+        if (isMakeup) monthMakeup += 1;
+        const title = `${dayKey} ${isDone ? (isMakeup ? "补签" : "打卡") : "未打卡"}`;
+        cells.push(`<span class="heat-cell ${cls} ${isToday ? "today" : ""}" title="${title}">${day}</span>`);
+      }
+
+      cards.push(`
+        <article class="heat-card">
+          <div class="heat-card-head">
+            <strong>${monthLabel}</strong>
+            <small>打卡 ${monthDone} 天 | 补签 ${monthMakeup} 天</small>
+          </div>
+          <div class="heat-week-head"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+          <div class="heat-grid">${cells.join("")}</div>
+        </article>
+      `);
+    }
+
+    streakHeatmap.innerHTML = cards.join("");
+    streakHeatmap.classList.toggle("hidden", !ui.streakHeatmapExpanded);
+  }
+
+  if (toggleStreakHeatmapBtn) {
+    toggleStreakHeatmapBtn.textContent = ui.streakHeatmapExpanded ? "收起月历" : "展开月历";
+  }
 }
 
 function renderChildTasks() {
@@ -785,17 +975,18 @@ function renderChildTasks() {
     }
 
     const proofHtml = task.needProof && !completion
-      ? `<br /><small>需要拍照凭证</small><br /><input type="file" accept="image/*" data-proof-task-id="${task.id}" />`
+      ? `<div class="child-task-proof"><small>需要拍照凭证</small><input type="file" accept="image/*" data-proof-task-id="${task.id}" /></div>`
       : task.needProof
-        ? `<br /><small>需要拍照凭证</small>`
+        ? `<div class="child-task-proof"><small>需要拍照凭证</small></div>`
         : "";
 
     const li = document.createElement("li");
-    li.className = `item ${!completion || completion?.state === "rejected" ? "pending-highlight" : ""}`;
+    li.className = `item child-task-item ${!completion || completion?.state === "rejected" ? "pending-highlight" : ""}`;
     li.innerHTML = `
-      <div>
-        <strong>${task.name}</strong><br />
-        <small>满分可得 ${task.stars}⭐ | 预计 +${task.stars}⭐</small>${proofHtml}
+      <div class="child-task-main">
+        <strong>${task.name}</strong>
+        <small class="child-task-meta">满分可得 ${task.stars}⭐ | 预计 +${task.stars}⭐</small>
+        ${proofHtml}
       </div>
       <div class="task-actions">${action}</div>
     `;
@@ -985,6 +1176,63 @@ function renderStats() {
   const range = statsRange?.value || "week";
   const startOfWeek = weekStartKey();
   const ratedList = [];
+  const scopedHistory = state.history.filter((item) => {
+    if (range !== "week") return true;
+    const day = toDateKeyFromHistory(item);
+    if (day === "unknown") return false;
+    return day >= startOfWeek;
+  });
+
+  let earnedStars = 0;
+  let spentStars = 0;
+  for (const item of scopedHistory) {
+    const delta = Number(item.delta || 0);
+    if (delta > 0) earnedStars += delta;
+    if (delta < 0) spentStars += Math.abs(delta);
+  }
+
+  const trendDays = [];
+  const historyByDay = {};
+  for (const item of state.history) {
+    const day = toDateKeyFromHistory(item);
+    if (day === "unknown") continue;
+    if (!historyByDay[day]) historyByDay[day] = [];
+    historyByDay[day].push(item);
+  }
+
+  for (let i = 6; i >= 0; i -= 1) {
+    const day = shiftDay(todayKey(), -i);
+    const dayHistory = historyByDay[day] || [];
+    let plus = 0;
+    let minus = 0;
+    for (const item of dayHistory) {
+      const delta = Number(item.delta || 0);
+      if (delta > 0) plus += delta;
+      if (delta < 0) minus += Math.abs(delta);
+    }
+    const ratedCount = Object.values(state.completions[day] || {}).filter((item) => item?.state === "rated").length;
+    trendDays.push({ day, net: plus - minus, ratedCount });
+  }
+
+  const contributionMap = {};
+  for (const [dayKey, dayMap] of Object.entries(state.completions)) {
+    if (range === "week" && dayKey < startOfWeek) continue;
+    for (const [taskId, completion] of Object.entries(dayMap)) {
+      if (completion?.state !== "rated") continue;
+      if (!contributionMap[taskId]) {
+        contributionMap[taskId] = {
+          taskId,
+          stars: 0,
+          count: 0,
+          activeCount: 0
+        };
+      }
+      contributionMap[taskId].stars += Number(completion.starsAwarded || 0);
+      contributionMap[taskId].count += 1;
+      if (completion.rating === RATING_ACTIVE) contributionMap[taskId].activeCount += 1;
+    }
+  }
+
   for (const [dayKey, dayMap] of Object.entries(state.completions)) {
     if (range === "week" && dayKey < startOfWeek) continue;
     for (const completion of Object.values(dayMap)) {
@@ -1000,26 +1248,138 @@ function renderStats() {
   const remindRate = total ? Math.round((remind / total) * 100) : 0;
   const passiveRate = total ? Math.round((passive / total) * 100) : 0;
   const rangeText = range === "week" ? "本周" : "全部";
-  const earned = weeklyEarned();
+  const goalEarned = range === "week" ? weeklyEarned() : earnedStars;
   const goal = Math.max(5, Number(state.weeklyGoal || 20));
-  const goalRate = Math.min(100, Math.round((earned / goal) * 100));
+  const goalRate = Math.min(100, Math.round((goalEarned / goal) * 100));
+  const netStars = earnedStars - spentStars;
+  const redeemCount = scopedHistory.filter((item) => item.type === "redeem").length;
+
+  const maxTrendAbs = Math.max(1, ...trendDays.map((item) => Math.abs(item.net)));
+  const trendWidth = 330;
+  const trendHeight = 118;
+  const trendPadding = 14;
+  const trendStep = (trendWidth - trendPadding * 2) / Math.max(1, trendDays.length - 1);
+  const trendToY = (value) => {
+    const normalized = (value + maxTrendAbs) / (maxTrendAbs * 2);
+    return Math.round((1 - normalized) * (trendHeight - trendPadding * 2) + trendPadding);
+  };
+  const trendPoints = trendDays
+    .map((item, index) => `${Math.round(trendPadding + trendStep * index)},${trendToY(item.net)}`)
+    .join(" ");
+  const trendDots = trendDays
+    .map((item, index) => {
+      const x = Math.round(trendPadding + trendStep * index);
+      const y = trendToY(item.net);
+      return `<circle cx="${x}" cy="${y}" r="3"></circle>`;
+    })
+    .join("");
+  const trendLabels = trendDays
+    .map((item) => `<span title="${item.day} 净增长 ${item.net >= 0 ? "+" : ""}${item.net}⭐">${item.day.slice(5)}</span>`)
+    .join("");
+
+  const contributionRows = Object.values(contributionMap)
+    .sort((a, b) => b.stars - a.stars || b.count - a.count)
+    .slice(0, 5)
+    .map((item) => {
+      const task = state.tasks.find((taskItem) => taskItem.id === item.taskId);
+      const taskName = task?.name || "已删除任务";
+      const activeRateByTask = item.count ? Math.round((item.activeCount / item.count) * 100) : 0;
+      return {
+        taskName,
+        stars: item.stars,
+        count: item.count,
+        activeRateByTask
+      };
+    });
+  const maxContributionStars = Math.max(1, ...contributionRows.map((row) => row.stars));
+  const contributionHtml = contributionRows.length
+    ? contributionRows.map((row, index) => {
+      const width = Math.max(10, Math.round((row.stars / maxContributionStars) * 100));
+      return `
+        <li class="rank-row">
+          <div class="rank-main">
+            <small class="rank-index">TOP ${index + 1}</small>
+            <strong>${row.taskName}</strong>
+            <small>完成 ${row.count} 次 | 主动率 ${row.activeRateByTask}%</small>
+          </div>
+          <div class="rank-side">
+            <b>+${row.stars}⭐</b>
+            <div class="rank-track"><div class="rank-fill" style="width:${width}%"></div></div>
+          </div>
+        </li>
+      `;
+    }).join("")
+    : "<div class=\"rank-empty\">还没有可统计的评分数据。</div>";
+
+  const bestDay = trendDays.reduce((best, item) => (item.net > best.net ? item : best), trendDays[0]);
+  const supportDay = trendDays.reduce((worst, item) => (item.net < worst.net ? item : worst), trendDays[0]);
+  const avgRated = Math.round((trendDays.reduce((sum, item) => sum + item.ratedCount, 0) / trendDays.length) * 10) / 10;
+  const todayMap = state.completions[todayKey()] || {};
+  const pendingToday = Object.values(todayMap).filter((item) => item?.state === "pending").length;
+  const rejectedToday = Object.values(todayMap).filter((item) => item?.state === "rejected").length;
+  const passiveToday = Object.values(todayMap).filter((item) => item?.state === "rated" && item?.rating === RATING_PASSIVE).length;
+  const submittedToday = Object.keys(todayMap).length;
+  const notSubmittedToday = Math.max(0, state.tasks.length - submittedToday);
+
+  let liveFocusText = "今天节奏不错，继续保持稳定输出。";
+  if (rejectedToday > 0) {
+    liveFocusText = `今天有 ${rejectedToday} 项被驳回，建议晚点一起复盘细节。`;
+  } else if (pendingToday > 0) {
+    liveFocusText = `今天还有 ${pendingToday} 项待家长评分，建议今天内完成反馈。`;
+  } else if (passiveToday > 0) {
+    liveFocusText = `今天出现 ${passiveToday} 项被动完成，建议先肯定再引导主动。`;
+  } else if (notSubmittedToday === state.tasks.length && state.tasks.length > 0) {
+    liveFocusText = "今天还没开始提交任务，可以先完成最简单的一项。";
+  }
 
   statsBox.innerHTML = `
-    <div class="stat-item"><small>${rangeText}总评分</small><b>${total}</b></div>
-    <div class="stat-item"><small>主动率</small><b>${activeRate}%</b></div>
-    <div class="stat-item"><small>提醒次数</small><b>${remind}</b></div>
-    <div class="stat-item"><small>被动次数</small><b>${passive}</b></div>
-    <div class="stat-item"><small>本周目标达成</small><b>${earned}/${goal}⭐ (${goalRate}%)</b></div>
-    <div class="stat-chart">
+    <div class="stat-item stat-hero">
+      <small>${rangeText}星星变化</small>
+      <b>${netStars >= 0 ? "+" : ""}${netStars}⭐</b>
+      <em>${rangeText}目标进度 ${goalEarned}/${goal}⭐（${goalRate}%）</em>
+    </div>
+    <div class="stat-item stat-live-focus">
+      <small>今日即时关注</small>
+      <b>${pendingToday + rejectedToday + passiveToday} 条</b>
+      <em>${liveFocusText}</em>
+    </div>
+    <div class="stat-item stat-pill"><small>${rangeText}总评分</small><b>${total}</b></div>
+    <div class="stat-item stat-pill"><small>主动率</small><b>${activeRate}%</b></div>
+    <div class="stat-item stat-pill"><small>提醒次数</small><b>${remind}</b></div>
+    <div class="stat-item stat-pill"><small>被动次数</small><b>${passive}</b></div>
+    <div class="stat-item stat-pill"><small>${rangeText}获得</small><b>+${earnedStars}⭐</b></div>
+    <div class="stat-item stat-pill"><small>${rangeText}兑换</small><b>-${spentStars}⭐（${redeemCount}次）</b></div>
+    <div class="stat-item stat-pill"><small>最近最闪亮一天</small><b>${bestDay.day.slice(5)}（${bestDay.net >= 0 ? "+" : ""}${bestDay.net}⭐）</b></div>
+    <div class="stat-item stat-pill"><small>最近最需鼓励一天（历史）</small><b>${supportDay.day.slice(5)}（${supportDay.net >= 0 ? "+" : ""}${supportDay.net}⭐）</b></div>
+    <div class="stat-item stat-pill"><small>最近日均评分任务</small><b>${avgRated} 项</b></div>
+    <div class="stat-chart stat-rating-chart">
+      <div class="stat-chart-title">评分分布</div>
       <div class="chart-row"><small>主动</small><div class="chart-track"><div class="chart-fill fill-active" style="width:${activeRate}%"></div></div><small>${activeRate}%</small></div>
       <div class="chart-row"><small>提醒</small><div class="chart-track"><div class="chart-fill fill-remind" style="width:${remindRate}%"></div></div><small>${remindRate}%</small></div>
       <div class="chart-row"><small>被动</small><div class="chart-track"><div class="chart-fill fill-passive" style="width:${passiveRate}%"></div></div><small>${passiveRate}%</small></div>
+    </div>
+    <div class="stat-chart stat-trend-chart">
+      <div class="stat-chart-title">最近7天星星变化</div>
+      <small class="stat-chart-sub">上方越高，表示当天净增加的⭐越多。</small>
+      <svg viewBox="0 0 ${trendWidth} ${trendHeight}" role="img" aria-label="近7天净增长趋势图">
+        <line class="trend-midline" x1="0" y1="${trendToY(0)}" x2="${trendWidth}" y2="${trendToY(0)}"></line>
+        <polyline class="trend-line" fill="none" points="${trendPoints}"></polyline>
+        ${trendDots}
+      </svg>
+      <div class="trend-labels">${trendLabels}</div>
+    </div>
+    <div class="stat-chart stat-rank-chart">
+      <div class="stat-chart-title">最给力任务榜</div>
+      <small class="stat-chart-sub">看看哪些任务最能稳定赚⭐。</small>
+      <ul class="rank-list">${contributionHtml}</ul>
     </div>
   `;
 }
 
 function renderAll() {
   const starsChanged = lastRenderedStars !== state.stars;
+  const weeklyGrantApplied = ensureWeeklyMakeupCardGrant();
+  if (weeklyGrantApplied) saveData();
   refreshStreakFromCheckins();
   todayDateText.textContent = `今天是 ${formatTodayLabel()}`;
   document.body.dataset.theme = state.theme || "sunny";
@@ -1027,11 +1387,23 @@ function renderAll() {
   parentStarCount.textContent = String(state.stars);
   soundToggle.checked = Boolean(state.soundEnabled);
   reduceMotionToggle.checked = Boolean(state.reduceMotion);
+  if (streakFeatureToggle) streakFeatureToggle.checked = Boolean(state.streakEnabled);
+  if (childStreakCard) childStreakCard.classList.toggle("hidden", !state.streakEnabled);
+  if (childTopGrid) childTopGrid.classList.toggle("streak-off", !state.streakEnabled);
+  if (makeupSettingsCol) makeupSettingsCol.classList.toggle("hidden", !state.streakEnabled);
   document.body.classList.toggle("reduce-motion", Boolean(state.reduceMotion));
   weeklyGoalInput.value = String(state.weeklyGoal);
   pinGraceInput.value = String(state.pinGraceMinutes);
   makeupWeeklyLimitInput.value = String(state.makeupConfig.weeklyLimit);
+  if (makeupCardWeeklyInput) makeupCardWeeklyInput.value = String(state.makeupConfig.weeklyCardGrant || 0);
   makeupCountMilestoneToggle.checked = Boolean(state.makeupConfig.countForMilestone);
+  if (makeupRuleSummary) {
+    const remain = getMakeupRemainThisWeek();
+    const limit = Number(state.makeupConfig.weeklyLimit || 0);
+    const weeklyGrant = Number(state.makeupConfig.weeklyCardGrant || 0);
+    const balance = Number(state.makeupCardBalance || 0);
+    makeupRuleSummary.textContent = `当前：每周最多补签 ${limit} 次，每周自动发卡 ${weeklyGrant} 张，库存 ${balance} 张，本周剩余 ${remain} 次（仅支持补昨天）`;
+  }
   themeSelect.value = state.theme || "sunny";
   if (syncStatusText) {
     syncStatusText.textContent = `同步模式：${syncAdapter.mode}（云同步未启用）`;
@@ -1274,6 +1646,16 @@ reduceMotionToggle.addEventListener("change", () => {
   renderAll();
 });
 
+if (streakFeatureToggle) {
+  streakFeatureToggle.addEventListener("change", () => {
+    captureRestorePoint("切换连续打卡功能前");
+    state.streakEnabled = streakFeatureToggle.checked;
+    addHistory(state.streakEnabled ? "已开启连续打卡功能" : "已关闭连续打卡功能", 0, "system");
+    saveData();
+    renderAll();
+  });
+}
+
 makeupConfigForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const weeklyLimit = Number(makeupWeeklyLimitInput.value);
@@ -1285,6 +1667,31 @@ makeupConfigForm.addEventListener("submit", (event) => {
   saveData();
   renderAll();
 });
+
+if (makeupCardWeeklyForm) {
+  makeupCardWeeklyForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const weeklyGrant = Number(makeupCardWeeklyInput.value);
+    if (!Number.isFinite(weeklyGrant) || weeklyGrant < 0) return;
+    captureRestorePoint("修改每周补签卡发放前");
+    state.makeupConfig.weeklyCardGrant = weeklyGrant;
+    addHistory(`已更新每周补签卡发放：${weeklyGrant} 张`, 0, "system");
+    saveData();
+    renderAll();
+  });
+}
+
+if (makeupCardGrantForm) {
+  makeupCardGrantForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const grantCount = Number(makeupCardGrantInput.value);
+    if (!Number.isFinite(grantCount) || grantCount < 1) return;
+    captureRestorePoint("家长奖励补签卡前");
+    grantMakeupCards(grantCount, "家长奖励补签卡");
+    saveData();
+    renderAll();
+  });
+}
 
 makeupCountMilestoneToggle.addEventListener("change", () => {
   captureRestorePoint("切换补签里程碑前");
@@ -1394,6 +1801,21 @@ restorePointBtn.addEventListener("click", () => {
 makeupCheckinBtn.addEventListener("click", () => {
   tryUseMakeupCard();
 });
+
+if (toggleStreakDetailsBtn) {
+  toggleStreakDetailsBtn.addEventListener("click", () => {
+    ui.streakDetailsExpanded = !ui.streakDetailsExpanded;
+    if (!ui.streakDetailsExpanded) ui.streakHeatmapExpanded = false;
+    renderStreak();
+  });
+}
+
+if (toggleStreakHeatmapBtn) {
+  toggleStreakHeatmapBtn.addEventListener("click", () => {
+    ui.streakHeatmapExpanded = !ui.streakHeatmapExpanded;
+    renderStreak();
+  });
+}
 
 undoLastRatingBtn.addEventListener("click", () => {
   undoLastRating();

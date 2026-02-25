@@ -32,7 +32,7 @@
       </header>
 
       <section id="childPanel" class="panel">
-        <div class="child-top-grid">
+        <div id="childTopGrid" class="child-top-grid">
           <article class="card">
             <h2>我的星星</h2>
             <div class="star-panel">
@@ -41,13 +41,34 @@
             </div>
           </article>
 
-          <article class="card">
+          <article id="childStreakCard" class="card">
             <h2>连续打卡</h2>
             <div class="streak-wrap">
               <span id="openStreakText" class="streak-badge">连续打卡 1 天</span>
               <small id="streakHintText">继续保持，明天再来打卡！</small>
               <small id="makeupInfoText">本周补签剩余 1 次</small>
+              <button id="toggleStreakDetailsBtn" class="btn-ghost streak-details-btn" type="button">展开打卡详情</button>
+              <div id="streakDetailPanel" class="hidden">
+              <div class="streak-stats">
+                <small id="monthCheckinText">本月打卡：0 天</small>
+                <small id="monthMakeupText">本月补签：0 天</small>
+                <small id="lifetimeCheckinText">累计打卡：0 天</small>
+              </div>
               <button id="makeupCheckinBtn" class="btn-soft" type="button">使用补签卡</button>
+              <ul id="streakMonthHistory" class="streak-month-history"></ul>
+              <div class="streak-heatmap-wrap">
+                <div class="streak-heatmap-head">
+                  <strong>月度打卡热力图</strong>
+                  <button id="toggleStreakHeatmapBtn" class="btn-ghost" type="button">展开月历</button>
+                  <div class="streak-legend">
+                    <span><i class="dot none"></i>未打卡</span>
+                    <span><i class="dot done"></i>正常打卡</span>
+                    <span><i class="dot makeup"></i>补签</span>
+                  </div>
+                </div>
+                <div id="streakHeatmap" class="streak-heatmap hidden"></div>
+              </div>
+              </div>
             </div>
           </article>
 
@@ -57,7 +78,6 @@
               <small id="weeklyGoalText">本周进度：0/20⭐</small>
               <div class="goal-bar"><div id="weeklyGoalBar" class="goal-fill"></div></div>
               <small id="goalMotivateText">再努力一点就能达标！</small>
-              <div id="milestoneRow" class="milestone-row"></div>
             </div>
           </article>
         </div>
@@ -113,6 +133,9 @@
 
         <article class="card">
           <h2>系统与补签设置</h2>
+          <div class="setting-highlight">
+            <label class="inline-check"><input id="streakFeatureToggle" type="checkbox" /> 连续打卡功能总开关（关闭后仅隐藏前端展示）</label>
+          </div>
           <div class="settings-grid">
             <div class="settings-col">
               <label class="inline-check"><input id="soundToggle" type="checkbox" /> 开启音效反馈</label>
@@ -120,11 +143,20 @@
               <small id="syncStatusText">同步模式：本地（未启用云同步）</small>
               <button id="syncCheckBtn" type="button" class="btn-soft">检查同步状态</button>
             </div>
-            <div class="settings-col">
+            <div id="makeupSettingsCol" class="settings-col">
               <form id="makeupConfigForm" class="inline-form goal-form">
-                <input id="makeupWeeklyLimitInput" type="number" min="0" max="7" value="1" placeholder="每周补签次数" />
-                <button type="submit">保存补签规则</button>
+                <input id="makeupWeeklyLimitInput" type="number" min="0" max="7" value="1" placeholder="每周可补签次数（0-7）" />
+                <button type="submit">保存每周次数</button>
               </form>
+              <form id="makeupCardWeeklyForm" class="inline-form goal-form">
+                <input id="makeupCardWeeklyInput" type="number" min="0" max="7" value="1" placeholder="每周自动发放补签卡（0-7）" />
+                <button type="submit">保存每周发卡</button>
+              </form>
+              <form id="makeupCardGrantForm" class="inline-form goal-form">
+                <input id="makeupCardGrantInput" type="number" min="1" max="20" value="1" placeholder="临时奖励补签卡（张）" />
+                <button type="submit">家长奖励补签卡</button>
+              </form>
+              <small id="makeupRuleSummary" class="setting-note">当前：每周最多补签 1 次（仅支持补昨天）</small>
               <small class="setting-note">当前规则：仅支持补签昨天（前一天漏打卡时显示补签按钮）。</small>
               <label class="inline-check"><input id="makeupCountMilestoneToggle" type="checkbox" /> 补签可触发里程碑奖励</label>
             </div>
