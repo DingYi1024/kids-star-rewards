@@ -882,6 +882,34 @@ function removeReward(rewardId) {
   renderAll();
 }
 
+function moveTask(taskId, direction) {
+  const index = state.tasks.findIndex((item) => item.id === taskId);
+  if (index < 0) return;
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= state.tasks.length) return;
+
+  captureRestorePoint("任务排序前");
+  const [task] = state.tasks.splice(index, 1);
+  state.tasks.splice(targetIndex, 0, task);
+  addHistory(`已调整任务顺序：${task.name}`, 0, "system");
+  saveData();
+  renderAll();
+}
+
+function moveReward(rewardId, direction) {
+  const index = state.rewards.findIndex((item) => item.id === rewardId);
+  if (index < 0) return;
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= state.rewards.length) return;
+
+  captureRestorePoint("奖励排序前");
+  const [reward] = state.rewards.splice(index, 1);
+  state.rewards.splice(targetIndex, 0, reward);
+  addHistory(`已调整奖励顺序：${reward.name}`, 0, "system");
+  saveData();
+  renderAll();
+}
+
 function renderWeeklyGoal() {
   const earned = weeklyEarned();
   const goal = Math.max(5, Number(state.weeklyGoal || 20));
@@ -1109,15 +1137,21 @@ function renderChildRewards() {
 
 function renderParentTasks() {
   parentTaskList.innerHTML = "";
-  for (const task of state.tasks) {
+  for (const [index, task] of state.tasks.entries()) {
+    const canMoveUp = index > 0;
+    const canMoveDown = index < state.tasks.length - 1;
     const li = document.createElement("li");
     li.className = "item";
     li.innerHTML = `
       <div>
-        <strong>${task.name}</strong><br />
+        <strong>${index + 1}. ${task.name}</strong><br />
         <small>星星值：${task.stars}⭐${task.needProof ? " | 需凭证" : ""}</small>
       </div>
       <div class="task-actions">
+        <div class="rate-buttons">
+          <button class="btn-ghost" data-parent-task-move="${task.id}" data-direction="up" ${canMoveUp ? "" : "disabled"}>上移</button>
+          <button class="btn-ghost" data-parent-task-move="${task.id}" data-direction="down" ${canMoveDown ? "" : "disabled"}>下移</button>
+        </div>
         <button class="btn-soft" data-parent-task-edit="${task.id}">修改</button>
         <button class="btn-passive" data-parent-task-delete="${task.id}">删除</button>
       </div>
@@ -1128,7 +1162,9 @@ function renderParentTasks() {
 
 function renderParentRewards() {
   parentRewardList.innerHTML = "";
-  for (const reward of state.rewards) {
+  for (const [index, reward] of state.rewards.entries()) {
+    const canMoveUp = index > 0;
+    const canMoveDown = index < state.rewards.length - 1;
     const stockText = Number.isFinite(reward.stock) ? `每周${reward.stock}，余${remainingStock(reward)}` : "不限";
     const cooldownText = Number(reward.cooldownDays || 0) > 0 ? ` | 冷却：${reward.cooldownDays}天` : "";
     const resetTip = Number.isFinite(reward.stock) ? ` | 恢复：${nextWeekResetLabel()}` : "";
@@ -1136,10 +1172,14 @@ function renderParentRewards() {
     li.className = "item";
     li.innerHTML = `
       <div>
-        <strong>${reward.name}</strong><br />
+        <strong>${index + 1}. ${reward.name}</strong><br />
         <small>兑换值：${reward.cost}⭐ | 库存：${stockText}${cooldownText}${resetTip}</small>
       </div>
       <div class="task-actions">
+        <div class="rate-buttons">
+          <button class="btn-ghost" data-parent-reward-move="${reward.id}" data-direction="up" ${canMoveUp ? "" : "disabled"}>上移</button>
+          <button class="btn-ghost" data-parent-reward-move="${reward.id}" data-direction="down" ${canMoveDown ? "" : "disabled"}>下移</button>
+        </div>
         <button class="btn-soft" data-parent-reward-edit="${reward.id}">修改</button>
         <button class="btn-passive" data-parent-reward-delete="${reward.id}">删除</button>
       </div>
@@ -2125,6 +2165,15 @@ parentTaskList.addEventListener("click", async (event) => {
     const ok = await showConfirm("确认删除这个任务吗？", "删除任务");
     if (!ok) return;
     removeTask(deleteId);
+    return;
+  }
+
+  const moveId = target.dataset.parentTaskMove;
+  if (moveId) {
+    const direction = target.dataset.direction;
+    if (direction === "up" || direction === "down") {
+      moveTask(moveId, direction);
+    }
   }
 });
 
@@ -2151,6 +2200,15 @@ parentRewardList.addEventListener("click", async (event) => {
     const ok = await showConfirm("确认删除这个奖励吗？", "删除奖励");
     if (!ok) return;
     removeReward(deleteId);
+    return;
+  }
+
+  const moveId = target.dataset.parentRewardMove;
+  if (moveId) {
+    const direction = target.dataset.direction;
+    if (direction === "up" || direction === "down") {
+      moveReward(moveId, direction);
+    }
   }
 });
 
