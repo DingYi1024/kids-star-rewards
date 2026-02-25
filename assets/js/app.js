@@ -245,7 +245,8 @@ function normalizeDataShape() {
     }))
     .slice(0, 20);
   if (!Array.isArray(state.restorePoints)) state.restorePoints = [];
-  if (typeof state.theme !== "string") state.theme = "sunny";
+  const allowedThemes = ["sunny", "ocean", "space", "festival"];
+  if (typeof state.theme !== "string" || !allowedThemes.includes(state.theme)) state.theme = "sunny";
   state.makeupConfig.weeklyLimit = Math.max(0, Number(state.makeupConfig.weeklyLimit ?? 1));
   state.makeupConfig.windowDays = Math.max(1, Number(state.makeupConfig.windowDays ?? 1));
   state.makeupConfig.countForMilestone = Boolean(state.makeupConfig.countForMilestone);
