@@ -20,6 +20,11 @@ const defaultData = {
   lastBackupExportAt: 0,
   streakEnabled: true,
   weeklyGoal: 20,
+  weeklyGoalChest: {
+    title: "周目标宝箱",
+    stars: 3
+  },
+  weeklyGoalChestClaimedByWeek: {},
   openStreakCount: 0,
   openStreakLastDay: "",
   streakMilestoneAwardDays: {},
@@ -114,6 +119,18 @@ function normalizeDataShape() {
   if (typeof state.lastBackupExportAt !== "number" || state.lastBackupExportAt < 0) state.lastBackupExportAt = 0;
   if (typeof state.streakEnabled !== "boolean") state.streakEnabled = true;
   if (typeof state.weeklyGoal !== "number" || state.weeklyGoal < 5) state.weeklyGoal = 20;
+  if (!state.weeklyGoalChest || typeof state.weeklyGoalChest !== "object") {
+    state.weeklyGoalChest = { title: "周目标宝箱", stars: 3 };
+  }
+  if (typeof state.weeklyGoalChest.title !== "string" || !state.weeklyGoalChest.title.trim()) {
+    state.weeklyGoalChest.title = "周目标宝箱";
+  }
+  if (typeof state.weeklyGoalChest.stars !== "number" || state.weeklyGoalChest.stars < 0) {
+    state.weeklyGoalChest.stars = 3;
+  }
+  if (!state.weeklyGoalChestClaimedByWeek || typeof state.weeklyGoalChestClaimedByWeek !== "object") {
+    state.weeklyGoalChestClaimedByWeek = {};
+  }
   if (typeof state.openStreakCount !== "number" || state.openStreakCount < 0) state.openStreakCount = 0;
   if (typeof state.openStreakLastDay !== "string") state.openStreakLastDay = "";
   if (!state.streakMilestoneAwardDays || typeof state.streakMilestoneAwardDays !== "object") state.streakMilestoneAwardDays = {};
@@ -291,6 +308,8 @@ const parentStarCount = document.querySelector("#parentStarCount");
 const weeklyGoalText = document.querySelector("#weeklyGoalText");
 const weeklyGoalBar = document.querySelector("#weeklyGoalBar");
 const goalMotivateText = document.querySelector("#goalMotivateText");
+const goalChestText = document.querySelector("#goalChestText");
+const claimGoalChestBtn = document.querySelector("#claimGoalChestBtn");
 
 const childTaskList = document.querySelector("#childTaskList");
 const childRewardList = document.querySelector("#childRewardList");
@@ -324,6 +343,10 @@ const bonusLimitText = document.querySelector("#bonusLimitText");
 
 const goalForm = document.querySelector("#goalForm");
 const weeklyGoalInput = document.querySelector("#weeklyGoalInput");
+const goalChestForm = document.querySelector("#goalChestForm");
+const goalChestTitleInput = document.querySelector("#goalChestTitleInput");
+const goalChestStarsInput = document.querySelector("#goalChestStarsInput");
+const goalChestParentText = document.querySelector("#goalChestParentText");
 
 const pinForm = document.querySelector("#pinForm");
 const pinInput = document.querySelector("#pinInput");
@@ -496,6 +519,18 @@ function weeklyEarned() {
     total += Number(state.earningsByDay[day] || 0);
   }
   return total;
+}
+
+function currentWeekKey() {
+  return weekStartKey();
+}
+
+function isWeeklyGoalReached() {
+  return weeklyEarned() >= Math.max(5, Number(state.weeklyGoal || 20));
+}
+
+function hasClaimedWeeklyGoalChest(weekKey = currentWeekKey()) {
+  return Boolean(state.weeklyGoalChestClaimedByWeek?.[weekKey]);
 }
 
 function dayDiff(fromDateKey, toDateKey) {
@@ -921,6 +956,36 @@ async function grantBonusByParent(reason, stars) {
   return true;
 }
 
+async function claimWeeklyGoalChest() {
+  const weekKey = currentWeekKey();
+  const reached = isWeeklyGoalReached();
+  if (!reached) {
+    await showAlert("本周目标尚未达成，暂时不能领取宝箱。", "暂不可领取");
+    return;
+  }
+  if (hasClaimedWeeklyGoalChest(weekKey)) {
+    await showAlert("本周目标宝箱已经领取过了。", "重复领取");
+    return;
+  }
+
+  const chestTitle = String(state.weeklyGoalChest?.title || "周目标宝箱").trim() || "周目标宝箱";
+  const chestStars = Math.max(0, Number(state.weeklyGoalChest?.stars || 0));
+  captureRestorePoint("领取目标宝箱前");
+  state.weeklyGoalChestClaimedByWeek[weekKey] = {
+    at: new Date().toLocaleString(),
+    title: chestTitle,
+    stars: chestStars
+  };
+  if (chestStars > 0) {
+    awardStars(chestStars, "system", `领取每周目标宝箱：${chestTitle}`);
+  } else {
+    addHistory(`领取每周目标宝箱：${chestTitle}`, 0, "system");
+  }
+  saveData();
+  renderAll();
+  await showAlert(`已领取「${chestTitle}」${chestStars > 0 ? `，获得 ${chestStars}⭐` : ""}。`, "领取成功");
+}
+
 function removeTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   captureRestorePoint("删除任务前");
@@ -975,16 +1040,37 @@ function moveReward(rewardId, direction) {
 function renderWeeklyGoal() {
   const earned = weeklyEarned();
   const goal = Math.max(5, Number(state.weeklyGoal || 20));
+  const weekKey = currentWeekKey();
+  const reached = earned >= goal;
+  const claimed = hasClaimedWeeklyGoalChest(weekKey);
+  const chestTitle = String(state.weeklyGoalChest?.title || "周目标宝箱").trim() || "周目标宝箱";
+  const chestStars = Math.max(0, Number(state.weeklyGoalChest?.stars || 0));
   const percent = Math.min(100, Math.round((earned / goal) * 100));
   const left = Math.max(0, goal - earned);
   weeklyGoalText.textContent = `本周进度：${earned}/${goal}⭐`;
   weeklyGoalBar.style.width = `${percent}%`;
-  weeklyGoalBar.classList.toggle("done", earned >= goal);
+  weeklyGoalBar.classList.toggle("done", reached);
 
-  if (earned >= goal) {
-    goalMotivateText.textContent = "已达成本周目标！解锁本周成就感！";
+  if (reached) {
+    goalMotivateText.textContent = claimed ? "已达标且已领取本周目标宝箱。" : "已达成本周目标，可以领取本周目标宝箱！";
   } else {
     goalMotivateText.textContent = `再拿 ${left}⭐，解锁本周目标宝箱！`;
+  }
+
+  if (goalChestText) {
+    if (claimed) {
+      goalChestText.textContent = `本周宝箱：${chestTitle}（+${chestStars}⭐）已领取`;
+    } else if (reached) {
+      goalChestText.textContent = `本周宝箱：${chestTitle}（+${chestStars}⭐）可领取`;
+    } else {
+      goalChestText.textContent = `本周宝箱：${chestTitle}（+${chestStars}⭐）未达成`;
+    }
+  }
+
+  if (claimGoalChestBtn) {
+    claimGoalChestBtn.classList.toggle("hidden", !reached && !claimed);
+    claimGoalChestBtn.disabled = claimed || !reached;
+    claimGoalChestBtn.textContent = claimed ? "本周已领取" : "领取本周目标宝箱";
   }
 }
 
@@ -1703,6 +1789,13 @@ function renderAll() {
   if (makeupSettingsCol) makeupSettingsCol.classList.toggle("hidden", !state.streakEnabled);
   document.body.classList.toggle("reduce-motion", Boolean(state.reduceMotion));
   weeklyGoalInput.value = String(state.weeklyGoal);
+  if (goalChestTitleInput) goalChestTitleInput.value = String(state.weeklyGoalChest.title || "周目标宝箱");
+  if (goalChestStarsInput) goalChestStarsInput.value = String(Math.max(0, Number(state.weeklyGoalChest.stars || 0)));
+  if (goalChestParentText) {
+    const chestTitle = String(state.weeklyGoalChest.title || "周目标宝箱").trim() || "周目标宝箱";
+    const chestStars = Math.max(0, Number(state.weeklyGoalChest.stars || 0));
+    goalChestParentText.textContent = `当前目标宝箱：${chestTitle}（+${chestStars}⭐），每周可领取 1 次。`;
+  }
   pinGraceInput.value = String(state.pinGraceMinutes);
   if (timezoneSelect) {
     timezoneSelect.value = state.timeConfig.fixedOffsetMinutes === null ? "" : String(state.timeConfig.fixedOffsetMinutes);
@@ -1828,6 +1921,21 @@ goalForm.addEventListener("submit", (event) => {
   saveData();
   renderAll();
 });
+
+if (goalChestForm) {
+  goalChestForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const title = String(goalChestTitleInput?.value || "").trim() || "周目标宝箱";
+    const stars = Math.max(0, Number(goalChestStarsInput?.value || 0));
+    if (!Number.isFinite(stars)) return;
+    captureRestorePoint("修改目标宝箱前");
+    state.weeklyGoalChest.title = title;
+    state.weeklyGoalChest.stars = stars;
+    addHistory(`已更新目标宝箱：${title}（+${stars}⭐）`, 0, "system");
+    saveData();
+    renderAll();
+  });
+}
 
 pinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -2166,6 +2274,12 @@ restorePointBtn.addEventListener("click", () => {
 makeupCheckinBtn.addEventListener("click", () => {
   tryUseMakeupCard();
 });
+
+if (claimGoalChestBtn) {
+  claimGoalChestBtn.addEventListener("click", () => {
+    claimWeeklyGoalChest();
+  });
+}
 
 if (toggleStreakDetailsBtn) {
   toggleStreakDetailsBtn.addEventListener("click", () => {

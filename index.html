@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#6a8bd6" />
     <link rel="manifest" href="manifest.json" />
     <title>星星积累小助手</title>
-    <link rel="stylesheet" href="assets/css/styles.css?v=20260225m" />
+    <link rel="stylesheet" href="assets/css/styles.css?v=20260225n" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -124,6 +124,8 @@
               <small id="weeklyGoalText">本周进度：0/20⭐</small>
               <div class="goal-bar"><div id="weeklyGoalBar" class="goal-fill"></div></div>
               <small id="goalMotivateText">再努力一点就能达标！</small>
+              <small id="goalChestText">周目标宝箱：未达成</small>
+              <button id="claimGoalChestBtn" class="btn-soft" type="button">领取本周目标宝箱</button>
             </div>
           </article>
         </div>
@@ -159,6 +161,12 @@
               <input id="weeklyGoalInput" type="number" min="5" max="100" value="20" required />
               <button type="submit">保存目标</button>
             </form>
+            <form id="goalChestForm" class="inline-form goal-form">
+              <input id="goalChestTitleInput" type="text" maxlength="30" placeholder="目标宝箱名称（如：周末特别奖励）" />
+              <input id="goalChestStarsInput" type="number" min="0" max="50" value="3" />
+              <button type="submit">保存目标宝箱</button>
+            </form>
+            <small id="goalChestParentText" class="setting-note">达成每周目标后，孩子可领取目标宝箱。</small>
           </article>
 
           <article class="card">
@@ -365,10 +373,10 @@
       </div>
     </div>
 
-    <script src="assets/js/date-utils.js?v=20260225m"></script>
-    <script src="assets/js/store.js?v=20260225m"></script>
-    <script src="assets/js/sync-auth-client.js?v=20260225m"></script>
-    <script src="assets/js/modals.js?v=20260225m"></script>
-    <script src="assets/js/app.js?v=20260225m"></script>
+    <script src="assets/js/date-utils.js?v=20260225n"></script>
+    <script src="assets/js/store.js?v=20260225n"></script>
+    <script src="assets/js/sync-auth-client.js?v=20260225n"></script>
+    <script src="assets/js/modals.js?v=20260225n"></script>
+    <script src="assets/js/app.js?v=20260225n"></script>
   </body>
 </html>
