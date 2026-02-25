@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS app_state (
 );
 `);
 
+try { db.exec("ALTER TABLE app_state ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); } catch (_) { /* column already exists */ }
+
 const findUserByNameStmt = db.prepare("SELECT * FROM users WHERE username = ?");
 const findUserByIdStmt = db.prepare("SELECT id, username FROM users WHERE id = ?");
 const createUserStmt = db.prepare("INSERT INTO users (id, username, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?)");
@@ -43,14 +45,16 @@ const createSessionStmt = db.prepare("INSERT INTO sessions (token, user_id, crea
 const findSessionStmt = db.prepare("SELECT * FROM sessions WHERE token = ?");
 const updateSessionSeenStmt = db.prepare("UPDATE sessions SET last_seen_at = ? WHERE token = ?");
 const deleteSessionStmt = db.prepare("DELETE FROM sessions WHERE token = ?");
-const getStateStmt = db.prepare("SELECT payload, updated_at FROM app_state WHERE id = ?");
+const getStateStmt = db.prepare("SELECT payload, updated_at, version FROM app_state WHERE id = ?");
 const upsertStateStmt = db.prepare(`
-INSERT INTO app_state (id, payload, updated_at)
-VALUES (?, ?, ?)
+INSERT INTO app_state (id, payload, updated_at, version)
+VALUES (?, ?, ?, 1)
 ON CONFLICT(id) DO UPDATE SET
   payload = excluded.payload,
-  updated_at = excluded.updated_at
+  updated_at = excluded.updated_at,
+  version = version + 1
 `);
+const getVersionStmt = db.prepare("SELECT version FROM app_state WHERE id = ?");
 
 function normalizeUsername(input) {
   return String(input || "").trim().toLowerCase();
@@ -70,6 +74,8 @@ function readToken(req) {
   return String(req.headers["x-auth-token"] || "").trim();
 }
 
+const MAX_SESSION_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
 function requireAuth(req, res, next) {
   const token = readToken(req);
   if (!token) {
@@ -80,6 +86,12 @@ function requireAuth(req, res, next) {
   const session = findSessionStmt.get(token);
   if (!session) {
     res.status(401).json({ ok: false, message: "invalid session" });
+    return;
+  }
+
+  if (Date.now() - session.last_seen_at > MAX_SESSION_AGE_MS) {
+    deleteSessionStmt.run(token);
+    res.status(401).json({ ok: false, message: "session expired" });
     return;
   }
 
@@ -171,13 +183,13 @@ app.post("/api/logout", requireAuth, (req, res) => {
 app.get("/api/state", requireAuth, (req, res) => {
   const row = getStateStmt.get(req.user.id);
   if (!row) {
-    res.status(404).json({ ok: false, message: "no state yet" });
+    res.json({ ok: false, message: "no state yet", version: 0 });
     return;
   }
 
   try {
     const data = JSON.parse(row.payload);
-    res.json({ ok: true, data, updatedAt: row.updated_at });
+    res.json({ ok: true, data, updatedAt: row.updated_at, version: row.version });
   } catch {
     res.status(500).json({ ok: false, message: "state parse failed" });
   }
@@ -190,10 +202,27 @@ app.post("/api/state", requireAuth, (req, res) => {
     return;
   }
 
+  const expectedVersion = req.body?.expectedVersion;
+  if (typeof expectedVersion === "number" && expectedVersion >= 0) {
+    const current = getVersionStmt.get(req.user.id);
+    const serverVersion = current ? Number(current.version || 0) : 0;
+    if (serverVersion !== Number(expectedVersion)) {
+      res.status(409).json({
+        ok: false,
+        conflict: true,
+        message: "数据版本冲突：其他设备已更新数据，请先拉取最新数据",
+        serverVersion,
+        clientVersion: Number(expectedVersion)
+      });
+      return;
+    }
+  }
+
   const payload = JSON.stringify(data);
   const now = Date.now();
   upsertStateStmt.run(req.user.id, payload, now);
-  res.json({ ok: true, updatedAt: now });
+  const newRow = getVersionStmt.get(req.user.id);
+  res.json({ ok: true, updatedAt: now, version: newRow?.version || 1 });
 });
 
 app.use(express.static(WEB_ROOT));

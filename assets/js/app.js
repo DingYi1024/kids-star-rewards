@@ -294,8 +294,8 @@ function saveData(options = {}) {
   const { markPending = true, feedbackText = "" } = options;
   if (markPending && state.serverSync) state.serverSync.pendingChanges = true;
   persist();
-  queueAutoSync();
   if (markPending && authState.token) {
+    queueAutoSync();
     flushAutoSync();
   }
   if (feedbackText) showActionToast(feedbackText);
@@ -599,7 +599,20 @@ async function flushAutoSync() {
   state.serverSync.lastSyncAt = Date.now();
 
   if (result.conflict) {
-    state.serverSync.lastSyncStatus = "版本冲突，请手动拉取";
+    if (typeof result.serverVersion === "number") {
+      state.serverSync.version = result.serverVersion;
+    }
+    state.serverSync.lastSyncStatus = "检测到其他设备更新，已切换到最新数据";
+    const pulled = await syncAdapter.pull();
+    if (pulled.ok && pulled.data) {
+      applyPulledServerData(pulled.data, {
+        captureLabel: "冲突覆盖前自动保存",
+        successStatus: "已同步最新数据（本地需重做刚才修改）",
+        historyText: "检测到多端同时修改，已切换到服务器最新版本",
+        version: pulled.version
+      });
+      showActionToast("检测到多端冲突，已同步服务器最新数据");
+    }
   } else {
     state.serverSync.lastSyncStatus = result.ok ? "自动保存成功" : "自动保存失败";
     if (result.ok) state.serverSync.pendingChanges = false;

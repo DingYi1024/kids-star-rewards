@@ -111,7 +111,13 @@
       async push(snapshot = createSnapshotData()) {
         if (!authState.token) return { ok: false, message: "请先登录账户" };
         const serverSync = getServerSync();
-        const body = { data: snapshot };
+        const expectedVersion = typeof serverSync?.version === "number"
+          ? Math.max(0, Math.floor(serverSync.version))
+          : 0;
+        const body = {
+          data: snapshot,
+          expectedVersion
+        };
 
         let response = await apiFetch("/api/state", {
           method: "POST",
@@ -122,13 +128,14 @@
         });
 
         if (response.status === 409) {
-          response = await apiFetch("/api/state", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ data: snapshot })
-          });
+          const conflict = await response.json().catch(() => ({}));
+          return {
+            ok: false,
+            conflict: true,
+            message: conflict.message || "数据版本冲突，请先同步最新数据",
+            serverVersion: typeof conflict.serverVersion === "number" ? conflict.serverVersion : undefined,
+            clientVersion: expectedVersion
+          };
         }
 
         if (!response.ok) {
