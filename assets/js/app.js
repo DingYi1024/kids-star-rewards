@@ -47,6 +47,7 @@ const defaultData = {
   serverSync: {
     enabled: true,
     autoPush: true,
+    pendingChanges: false,
     lastSyncAt: 0,
     lastSyncStatus: "未同步"
   },
@@ -137,6 +138,7 @@ function normalizeDataShape() {
   if (typeof state.serverSync.enabled !== "boolean") state.serverSync.enabled = true;
   state.serverSync.enabled = true;
   if (typeof state.serverSync.autoPush !== "boolean") state.serverSync.autoPush = true;
+  if (typeof state.serverSync.pendingChanges !== "boolean") state.serverSync.pendingChanges = false;
   if (typeof state.serverSync.lastSyncAt !== "number" || state.serverSync.lastSyncAt < 0) state.serverSync.lastSyncAt = 0;
   if (typeof state.serverSync.lastSyncStatus !== "string") state.serverSync.lastSyncStatus = "未同步";
   if (!Array.isArray(state.restorePoints)) state.restorePoints = [];
@@ -176,7 +178,9 @@ function normalizeDataShape() {
 
 normalizeDataShape();
 
-function saveData() {
+function saveData(options = {}) {
+  const { markPending = true } = options;
+  if (markPending && state.serverSync) state.serverSync.pendingChanges = true;
   persist();
   queueAutoSync();
 }
@@ -420,6 +424,7 @@ async function flushAutoSync() {
   const result = await syncAdapter.push();
   state.serverSync.lastSyncAt = Date.now();
   state.serverSync.lastSyncStatus = result.ok ? "自动保存成功" : "自动保存失败";
+  if (result.ok) state.serverSync.pendingChanges = false;
   persist();
   autoSyncRunning = false;
 
@@ -1498,6 +1503,7 @@ function applyPulledServerData(serverData, options = {}) {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, { ...structuredClone(defaultData), ...serverData });
   state.serverSync = keepServerSync;
+  state.serverSync.pendingChanges = false;
   setSyncStatus(successStatus);
   state.restorePoints = keepRestorePoints;
   normalizeDataShape();
@@ -2249,6 +2255,15 @@ async function bootstrapServerState() {
   const status = await syncAdapter.getStatus();
   if (!status.canSync) return;
 
+  if (state.serverSync?.pendingChanges) {
+    const pushed = await syncAdapter.push();
+    setSyncStatus(pushed.ok ? "恢复未同步数据成功" : "恢复未同步数据失败");
+    if (pushed.ok) state.serverSync.pendingChanges = false;
+    persist();
+    renderAll();
+    if (!pushed.ok) return;
+  }
+
   const result = await syncAdapter.pull();
   if (result.ok && result.data) {
     applyPulledServerData(result.data, {
@@ -2261,7 +2276,7 @@ async function bootstrapServerState() {
   if (String(result.message || "").includes("暂无") || String(result.message || "").includes("no state")) {
     const pushed = await syncAdapter.push();
     setSyncStatus(pushed.ok ? "初始化上传成功" : "初始化上传失败");
-    saveData();
+    saveData({ markPending: false });
     renderAll();
   }
 }
@@ -2279,7 +2294,7 @@ async function initApp() {
 
   clearTaskEdit();
   clearRewardEdit();
-  saveData();
+  saveData({ markPending: false });
   renderAll();
   await bootstrapServerState();
 
