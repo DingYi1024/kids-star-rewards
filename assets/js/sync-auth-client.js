@@ -110,23 +110,37 @@
       },
       async push(snapshot = createSnapshotData()) {
         if (!authState.token) return { ok: false, message: "请先登录账户" };
-        const response = await apiFetch("/api/state", {
+        const serverSync = getServerSync();
+        const body = { data: snapshot };
+
+        let response = await apiFetch("/api/state", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ data: snapshot })
+          body: JSON.stringify(body)
         });
+
+        if (response.status === 409) {
+          response = await apiFetch("/api/state", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ data: snapshot })
+          });
+        }
 
         if (!response.ok) {
           const text = await response.text();
           return { ok: false, message: `保存失败：${text || response.status}` };
         }
 
-        const serverSync = getServerSync();
+        const result = await response.json().catch(() => ({}));
         if (serverSync && typeof serverSync === "object") {
           serverSync.lastSyncAt = Date.now();
           serverSync.lastSyncStatus = "自动保存成功";
+          if (typeof result.version === "number") serverSync.version = result.version;
         }
 
         return {
@@ -136,7 +150,7 @@
       },
       async pull() {
         if (!authState.token) return { ok: false, message: "请先登录账户" };
-        const response = await apiFetch("/api/state", { method: "GET" });
+        const response = await apiFetch(`/api/state?t=${Date.now()}`, { method: "GET" });
 
         if (!response.ok) {
           const text = await response.text();
@@ -145,10 +159,10 @@
 
         const payload = await response.json();
         if (!payload?.ok || !payload?.data) {
-          return { ok: false, message: "服务器暂无可用数据" };
+          return { ok: false, message: "服务器暂无可用数据", version: payload?.version || 0 };
         }
 
-        return { ok: true, message: "已从服务器拉取", data: payload.data };
+        return { ok: true, message: "已从服务器拉取", data: payload.data, version: payload.version || 0 };
       }
     };
 
