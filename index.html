@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260225aa" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260225ab" />
 </head>
 
 <body>
@@ -156,7 +156,11 @@
           <h2>今日任务</h2>
           <small id="todayTaskSummary">今天已完成 0/0 项</small>
           <ul id="childTaskList" class="list"></ul>
-          <div id="childTaskEmpty" class="empty-state hidden">🌟 今天没有任务，休息一下吧！</div>
+          <div id="childTaskEmpty" class="empty-state hidden">
+            <div class="empty-state-emoji" aria-hidden="true">🌟</div>
+            <strong>今天还没有任务安排</strong>
+            <small>家长添加任务后，这里会显示可打卡的内容。</small>
+          </div>
         </article>
 
         <article class="card">
@@ -373,7 +377,11 @@
             <button id="approveAllRemindBtn" class="btn-remind" type="button">一键全部提醒</button>
           </div>
           <ul id="parentPendingList" class="list"></ul>
-          <div id="pendingEmpty" class="empty-state hidden">🎉 暂无待评分任务，孩子今天的表现已全部审阅</div>
+          <div id="pendingEmpty" class="empty-state hidden">
+            <div class="empty-state-emoji" aria-hidden="true">🎉</div>
+            <strong>暂无待评分任务</strong>
+            <small>孩子今天的表现已全部审阅。</small>
+          </div>
         </article>
 
         <article class="card">
@@ -389,7 +397,11 @@
             <option value="audit">审计</option>
           </select>
           <ul id="parentHistoryList" class="history"></ul>
-          <div id="historyEmpty" class="empty-state hidden">📝 还没有记录，完成第一个任务后就会出现在这里</div>
+          <div id="historyEmpty" class="empty-state hidden">
+            <div class="empty-state-emoji" aria-hidden="true">📝</div>
+            <strong>还没有记录</strong>
+            <small>完成第一个任务后，成长记录就会出现在这里。</small>
+          </div>
           <div class="action-row">
             <button id="exportBtn" type="button">导出数据</button>
             <button id="exportCsvBtn" type="button" class="btn-soft">导出CSV</button>
@@ -461,11 +473,11 @@
 
   <div id="actionToast" class="action-toast hidden" role="status" aria-live="polite"></div>
 
-  <script src="assets/js/date-utils.js?v=20260225aa"></script>
-  <script src="assets/js/store.js?v=20260225aa"></script>
-  <script src="assets/js/sync-auth-client.js?v=20260225aa"></script>
-  <script src="assets/js/modals.js?v=20260225aa"></script>
-  <script src="assets/js/app.js?v=20260225aa"></script>
+  <script src="assets/js/date-utils.js?v=20260225ab"></script>
+  <script src="assets/js/store.js?v=20260225ab"></script>
+  <script src="assets/js/sync-auth-client.js?v=20260225ab"></script>
+  <script src="assets/js/modals.js?v=20260225ab"></script>
+  <script src="assets/js/app.js?v=20260225ab"></script>
 </body>
 
 </html>

@@ -1888,11 +1888,36 @@ body.reduce-motion *::after {
 /* ── Empty State ── */
 .empty-state {
   text-align: center;
-  padding: 28px 14px;
-  color: var(--muted);
+  padding: 20px 14px;
+  color: #5d6880;
   font-size: .95rem;
-  opacity: .75;
-  line-height: 1.6
+  line-height: 1.6;
+  border: 1px dashed #d5dff0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff, #f6f9ff);
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.empty-state strong {
+  color: #3d4e6d;
+  font-size: 0.98rem;
+}
+
+.empty-state small {
+  color: #67758f;
+}
+
+.empty-state-emoji {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  background: #eef4ff;
+  border: 1px solid #d9e5fb;
 }
 
 /* ── Stats Hierarchy ── */
