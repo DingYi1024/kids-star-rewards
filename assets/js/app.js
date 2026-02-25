@@ -1734,10 +1734,6 @@ function renderParentPending() {
   }
 
   if (!pendingEntries.length) {
-    const li = document.createElement("li");
-    li.className = "item";
-    li.innerHTML = "<small>没有待评分任务。</small>";
-    parentPendingList.appendChild(li);
     return;
   }
 
@@ -1807,9 +1803,6 @@ function renderHistory(target, filter) {
     list = list.filter((item) => String(item.text || "").toLowerCase().includes(keyword));
   }
   if (!list.length) {
-    const li = document.createElement("li");
-    li.textContent = "还没有记录。";
-    target.appendChild(li);
     return;
   }
 
