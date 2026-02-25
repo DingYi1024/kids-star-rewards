@@ -652,8 +652,14 @@ body::after {
 #goalMotivateText,
 #makeupInfoText,
 #streakHintText,
-#syncStatusText {
+#syncStatusText,
+#bankSummaryText {
   color: var(--muted);
+}
+
+#bankSummaryText {
+  display: block;
+  margin: 8px 0 6px;
 }
 
 .streak-wrap,

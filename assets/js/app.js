@@ -63,6 +63,15 @@ const defaultData = {
     weeklyLimit: 30
   },
   bonusUsageByWeek: {},
+  bankConfig: {
+    weeklyRatePercent: 1,
+    weeklyInterestCap: 20,
+    allowChildWithdraw: true
+  },
+  bank: {
+    balance: 0,
+    lastInterestWeek: ""
+  },
   pricingConfig: {
     hotStockThreshold: 1,
     hotMarkupPercent: 20
@@ -190,6 +199,15 @@ function normalizeDataShape() {
   if (!state.bonusConfig || typeof state.bonusConfig !== "object") state.bonusConfig = { weeklyLimit: 30 };
   state.bonusConfig.weeklyLimit = Math.max(1, Number(state.bonusConfig.weeklyLimit || 30));
   if (!state.bonusUsageByWeek || typeof state.bonusUsageByWeek !== "object") state.bonusUsageByWeek = {};
+  if (!state.bankConfig || typeof state.bankConfig !== "object") {
+    state.bankConfig = { weeklyRatePercent: 1, weeklyInterestCap: 20, allowChildWithdraw: true };
+  }
+  state.bankConfig.weeklyRatePercent = Math.max(0, Number(state.bankConfig.weeklyRatePercent || 1));
+  state.bankConfig.weeklyInterestCap = Math.max(1, Number(state.bankConfig.weeklyInterestCap || 20));
+  state.bankConfig.allowChildWithdraw = state.bankConfig.allowChildWithdraw !== false;
+  if (!state.bank || typeof state.bank !== "object") state.bank = { balance: 0, lastInterestWeek: "" };
+  state.bank.balance = Math.max(0, Number(state.bank.balance || 0));
+  if (typeof state.bank.lastInterestWeek !== "string") state.bank.lastInterestWeek = "";
   if (!state.pricingConfig || typeof state.pricingConfig !== "object") {
     state.pricingConfig = { hotStockThreshold: 1, hotMarkupPercent: 20 };
   }
@@ -339,6 +357,10 @@ const childTopGrid = document.querySelector("#childTopGrid");
 const childStreakCard = document.querySelector("#childStreakCard");
 
 const childStarCount = document.querySelector("#childStarCount");
+const bankSummaryText = document.querySelector("#bankSummaryText");
+const bankActionForm = document.querySelector("#bankActionForm");
+const bankActionType = document.querySelector("#bankActionType");
+const bankActionAmount = document.querySelector("#bankActionAmount");
 const openStreakText = document.querySelector("#openStreakText");
 const streakHintText = document.querySelector("#streakHintText");
 const makeupInfoText = document.querySelector("#makeupInfoText");
@@ -399,6 +421,11 @@ const parentRewardList = document.querySelector("#parentRewardList");
 const bonusForm = document.querySelector("#bonusForm");
 const bonusReason = document.querySelector("#bonusReason");
 const bonusStars = document.querySelector("#bonusStars");
+const bankConfigForm = document.querySelector("#bankConfigForm");
+const bankRateInput = document.querySelector("#bankRateInput");
+const bankCapInput = document.querySelector("#bankCapInput");
+const bankWithdrawToggle = document.querySelector("#bankWithdrawToggle");
+const bankRuleSummary = document.querySelector("#bankRuleSummary");
 const bonusLimitForm = document.querySelector("#bonusLimitForm");
 const bonusWeeklyLimitInput = document.querySelector("#bonusWeeklyLimitInput");
 const bonusLimitText = document.querySelector("#bonusLimitText");
@@ -572,6 +599,7 @@ if (!todayKey || !formatTodayLabel || !weekStartKey || !shiftDay || !daysBetween
 }
 
 applyTimezoneConfig();
+if (!state.bank.lastInterestWeek) state.bank.lastInterestWeek = weekStartKey();
 
 function weeklyEarned() {
   const start = weekStartKey();
@@ -758,6 +786,86 @@ function drawGachaReward() {
     if (roll <= 0) return item;
   }
   return pool[pool.length - 1] || null;
+}
+
+function estimateWeeklyBankInterest() {
+  const balance = Math.max(0, Number(state.bank?.balance || 0));
+  const rate = Math.max(0, Number(state.bankConfig?.weeklyRatePercent || 0)) / 100;
+  const cap = Math.max(1, Number(state.bankConfig?.weeklyInterestCap || 20));
+  return Math.min(cap, Math.floor(balance * rate));
+}
+
+function settleBankInterestIfNeeded() {
+  const nowWeek = weekStartKey();
+  if (!state.bank.lastInterestWeek) {
+    state.bank.lastInterestWeek = nowWeek;
+    return false;
+  }
+  if (state.bank.lastInterestWeek >= nowWeek) return false;
+
+  let changed = false;
+  let cursor = state.bank.lastInterestWeek;
+  while (cursor < nowWeek) {
+    const nextWeek = shiftDay(cursor, 7);
+    const base = Math.max(0, Number(state.bank.balance || 0));
+    const rate = Math.max(0, Number(state.bankConfig.weeklyRatePercent || 0)) / 100;
+    const cap = Math.max(1, Number(state.bankConfig.weeklyInterestCap || 20));
+    const interest = Math.min(cap, Math.floor(base * rate));
+    if (interest > 0) {
+      state.bank.balance += interest;
+      addHistory(`银行周利息入账（${cursor}）`, interest, "bonus", { actor: "system" });
+      addAudit("银行周利息结算", interest, "bonus", {
+        actor: "system",
+        action: "bank_interest_settlement",
+        detail: `week:${cursor},base:${base},rate:${state.bankConfig.weeklyRatePercent}%`
+      });
+    }
+    state.bank.lastInterestWeek = nextWeek;
+    cursor = nextWeek;
+    changed = true;
+  }
+  return changed;
+}
+
+async function moveStarsByBank(action, amount) {
+  const stars = Math.floor(Number(amount || 0));
+  if (!Number.isFinite(stars) || stars < 1) {
+    await showAlert("请输入正确的星星数量。", "操作失败");
+    return;
+  }
+
+  if (action === "deposit") {
+    if (state.stars < stars) {
+      await showAlert("钱包星星不足，无法存入。", "操作失败");
+      return;
+    }
+    captureRestorePoint("银行存入前");
+    state.stars -= stars;
+    state.bank.balance += stars;
+    addHistory(`存入银行 ${stars}⭐`, 0, "system", { actor: "child" });
+    addAudit("银行存入", 0, "system", { actor: "child", action: "bank_deposit", detail: `stars:${stars}` });
+    saveData();
+    renderAll();
+    return;
+  }
+
+  if (action === "withdraw") {
+    if (!state.bankConfig.allowChildWithdraw) {
+      await showAlert("当前规则不允许孩子自行取出，请家长端调整。", "操作受限");
+      return;
+    }
+    if (state.bank.balance < stars) {
+      await showAlert("银行星星不足，无法取出。", "操作失败");
+      return;
+    }
+    captureRestorePoint("银行取出前");
+    state.bank.balance -= stars;
+    state.stars += stars;
+    addHistory(`从银行取出 ${stars}⭐`, 0, "system", { actor: "child" });
+    addAudit("银行取出", 0, "system", { actor: "child", action: "bank_withdraw", detail: `stars:${stars}` });
+    saveData();
+    renderAll();
+  }
 }
 
 function getLastRedeemDay(rewardId) {
@@ -1971,6 +2079,8 @@ async function showAuthError(message, title) {
 
 function renderAll() {
   applyTimezoneConfig();
+  const interestChanged = settleBankInterestIfNeeded();
+  if (interestChanged) saveData();
   const activeElement = document.activeElement;
   const isFocusableField =
     activeElement instanceof HTMLInputElement ||
@@ -1991,6 +2101,9 @@ function renderAll() {
   document.body.dataset.theme = state.theme || "sunny";
   childStarCount.textContent = String(state.stars);
   parentStarCount.textContent = String(state.stars);
+  if (bankSummaryText) {
+    bankSummaryText.textContent = `银行：${Math.floor(state.bank.balance)}⭐ | 下周预计利息 +${estimateWeeklyBankInterest()}⭐`;
+  }
   soundToggle.checked = Boolean(state.soundEnabled);
   reduceMotionToggle.checked = Boolean(state.reduceMotion);
   if (streakFeatureToggle) streakFeatureToggle.checked = Boolean(state.streakEnabled);
@@ -2029,6 +2142,12 @@ function renderAll() {
   }
   if (bonusLimitText) {
     bonusLimitText.textContent = `本周额外奖励剩余：${getBonusRemainThisWeek()}⭐（每周上限 ${state.bonusConfig.weeklyLimit}⭐）`;
+  }
+  if (bankRateInput) bankRateInput.value = String(Number(state.bankConfig.weeklyRatePercent || 1));
+  if (bankCapInput) bankCapInput.value = String(Number(state.bankConfig.weeklyInterestCap || 20));
+  if (bankWithdrawToggle) bankWithdrawToggle.checked = Boolean(state.bankConfig.allowChildWithdraw);
+  if (bankRuleSummary) {
+    bankRuleSummary.textContent = `银行规则：每周利率 ${state.bankConfig.weeklyRatePercent}%（单周上限 ${state.bankConfig.weeklyInterestCap}⭐）`;
   }
   if (hotStockThresholdInput) hotStockThresholdInput.value = String(Math.max(1, Number(state.pricingConfig.hotStockThreshold || 1)));
   if (hotMarkupPercentInput) hotMarkupPercentInput.value = String(Math.max(0, Number(state.pricingConfig.hotMarkupPercent || 0)));
@@ -2416,6 +2535,37 @@ bonusForm.addEventListener("submit", async (event) => {
   bonusForm.reset();
   bonusStars.value = "1";
 });
+
+if (bankActionForm) {
+  bankActionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const action = String(bankActionType?.value || "deposit");
+    const amount = Number(bankActionAmount?.value || 0);
+    await moveStarsByBank(action, amount);
+    if (bankActionAmount) bankActionAmount.value = "1";
+  });
+}
+
+if (bankConfigForm) {
+  bankConfigForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const rate = Number(bankRateInput?.value || 0);
+    const cap = Number(bankCapInput?.value || 0);
+    if (!Number.isFinite(rate) || rate < 0) return;
+    if (!Number.isFinite(cap) || cap < 1) return;
+    captureRestorePoint("修改银行规则前");
+    state.bankConfig.weeklyRatePercent = Math.round(rate * 10) / 10;
+    state.bankConfig.weeklyInterestCap = Math.round(cap);
+    state.bankConfig.allowChildWithdraw = Boolean(bankWithdrawToggle?.checked);
+    addHistory(`已更新银行规则：周利率${state.bankConfig.weeklyRatePercent}%`, 0, "system");
+    addAudit("更新银行规则", 0, "system", {
+      action: "bank_config_update",
+      detail: `rate:${state.bankConfig.weeklyRatePercent},cap:${state.bankConfig.weeklyInterestCap},allowWithdraw:${state.bankConfig.allowChildWithdraw}`
+    });
+    saveData();
+    renderAll();
+  });
+}
 
 if (bonusLimitForm) {
   bonusLimitForm.addEventListener("submit", (event) => {
