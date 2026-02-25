@@ -51,6 +51,13 @@ const defaultData = {
     lastSyncAt: 0,
     lastSyncStatus: "未同步"
   },
+  timeConfig: {
+    fixedOffsetMinutes: null
+  },
+  bonusConfig: {
+    weeklyLimit: 30
+  },
+  bonusUsageByWeek: {},
   theme: "sunny",
   restorePoints: [],
   tasks: [
@@ -141,6 +148,17 @@ function normalizeDataShape() {
   if (typeof state.serverSync.pendingChanges !== "boolean") state.serverSync.pendingChanges = false;
   if (typeof state.serverSync.lastSyncAt !== "number" || state.serverSync.lastSyncAt < 0) state.serverSync.lastSyncAt = 0;
   if (typeof state.serverSync.lastSyncStatus !== "string") state.serverSync.lastSyncStatus = "未同步";
+  if (!state.timeConfig || typeof state.timeConfig !== "object") state.timeConfig = { fixedOffsetMinutes: null };
+  if (!Object.hasOwn(state.timeConfig, "fixedOffsetMinutes")) state.timeConfig.fixedOffsetMinutes = null;
+  if (state.timeConfig.fixedOffsetMinutes !== null) {
+    const offset = Number(state.timeConfig.fixedOffsetMinutes);
+    state.timeConfig.fixedOffsetMinutes = Number.isFinite(offset)
+      ? Math.max(-720, Math.min(840, Math.round(offset)))
+      : null;
+  }
+  if (!state.bonusConfig || typeof state.bonusConfig !== "object") state.bonusConfig = { weeklyLimit: 30 };
+  state.bonusConfig.weeklyLimit = Math.max(1, Number(state.bonusConfig.weeklyLimit || 30));
+  if (!state.bonusUsageByWeek || typeof state.bonusUsageByWeek !== "object") state.bonusUsageByWeek = {};
   if (!Array.isArray(state.restorePoints)) state.restorePoints = [];
   if (typeof state.theme !== "string") state.theme = "sunny";
   state.makeupConfig.weeklyLimit = Math.max(0, Number(state.makeupConfig.weeklyLimit ?? 1));
@@ -300,6 +318,9 @@ const parentRewardList = document.querySelector("#parentRewardList");
 const bonusForm = document.querySelector("#bonusForm");
 const bonusReason = document.querySelector("#bonusReason");
 const bonusStars = document.querySelector("#bonusStars");
+const bonusLimitForm = document.querySelector("#bonusLimitForm");
+const bonusWeeklyLimitInput = document.querySelector("#bonusWeeklyLimitInput");
+const bonusLimitText = document.querySelector("#bonusLimitText");
 
 const goalForm = document.querySelector("#goalForm");
 const weeklyGoalInput = document.querySelector("#weeklyGoalInput");
@@ -311,6 +332,9 @@ const pinGraceForm = document.querySelector("#pinGraceForm");
 const pinGraceInput = document.querySelector("#pinGraceInput");
 const soundToggle = document.querySelector("#soundToggle");
 const reduceMotionToggle = document.querySelector("#reduceMotionToggle");
+const timezoneForm = document.querySelector("#timezoneForm");
+const timezoneSelect = document.querySelector("#timezoneSelect");
+const timezoneSummary = document.querySelector("#timezoneSummary");
 const streakFeatureToggle = document.querySelector("#streakFeatureToggle");
 const syncStatusText = document.querySelector("#syncStatusText");
 const makeupConfigForm = document.querySelector("#makeupConfigForm");
@@ -454,12 +478,15 @@ const {
   shiftDay,
   daysBetween,
   buildMonthKey,
-  buildDayKey
+  buildDayKey,
+  setFixedOffsetMinutes
 } = window.KSRDateUtils || {};
 
-if (!todayKey || !formatTodayLabel || !weekStartKey || !shiftDay || !daysBetween || !buildMonthKey || !buildDayKey) {
+if (!todayKey || !formatTodayLabel || !weekStartKey || !shiftDay || !daysBetween || !buildMonthKey || !buildDayKey || !setFixedOffsetMinutes) {
   throw new Error("KSRDateUtils not loaded");
 }
+
+applyTimezoneConfig();
 
 function weeklyEarned() {
   const start = weekStartKey();
@@ -495,6 +522,33 @@ function usedStockThisWeek(rewardId) {
 function getMakeupUsageMap(weekKey) {
   if (!state.makeupUsageByWeek[weekKey]) state.makeupUsageByWeek[weekKey] = { count: 0 };
   return state.makeupUsageByWeek[weekKey];
+}
+
+function getBonusUsageMap(weekKey) {
+  if (!state.bonusUsageByWeek[weekKey]) state.bonusUsageByWeek[weekKey] = { stars: 0 };
+  return state.bonusUsageByWeek[weekKey];
+}
+
+function getBonusRemainThisWeek() {
+  const weeklyLimit = Math.max(1, Number(state.bonusConfig.weeklyLimit || 30));
+  const usage = getBonusUsageMap(weekStartKey());
+  return Math.max(0, weeklyLimit - Number(usage.stars || 0));
+}
+
+function timezoneOffsetText(offsetMinutes) {
+  if (offsetMinutes === null || offsetMinutes === undefined || offsetMinutes === "") return "跟随设备时区";
+  const total = Number(offsetMinutes);
+  if (!Number.isFinite(total)) return "跟随设备时区";
+  const sign = total >= 0 ? "+" : "-";
+  const abs = Math.abs(total);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `UTC${sign}${hh}:${mm}`;
+}
+
+function applyTimezoneConfig() {
+  const fixedOffsetMinutes = state.timeConfig?.fixedOffsetMinutes;
+  setFixedOffsetMinutes(fixedOffsetMinutes === null || fixedOffsetMinutes === "" ? null : Number(fixedOffsetMinutes));
 }
 
 function getMakeupRemainThisWeek() {
@@ -851,12 +905,20 @@ function redeemRewardByChild(rewardId) {
   renderAll();
 }
 
-function grantBonusByParent(reason, stars) {
-  if (!reason || Number.isNaN(stars) || stars < 1) return;
+async function grantBonusByParent(reason, stars) {
+  if (!reason || Number.isNaN(stars) || stars < 1) return false;
+  const remain = getBonusRemainThisWeek();
+  if (stars > remain) {
+    await showAlert(`本周额外奖励还剩 ${remain}⭐，请调小分值或下周再发放。`, "超出每周上限");
+    return false;
+  }
   captureRestorePoint("额外奖励前");
+  const usage = getBonusUsageMap(weekStartKey());
+  usage.stars = Number(usage.stars || 0) + stars;
   awardStars(stars, "bonus", `家长额外奖励：${reason}`);
   saveData();
   renderAll();
+  return true;
 }
 
 function removeTask(taskId) {
@@ -1600,6 +1662,15 @@ async function showAuthError(message, title) {
 }
 
 function renderAll() {
+  applyTimezoneConfig();
+  const activeElement = document.activeElement;
+  const activeInputState = activeElement instanceof HTMLInputElement && activeElement.id
+    ? {
+      id: activeElement.id,
+      start: activeElement.selectionStart,
+      end: activeElement.selectionEnd
+    }
+    : null;
   const starsChanged = lastRenderedStars !== state.stars;
   const weeklyGrantApplied = ensureWeeklyMakeupCardGrant();
   if (weeklyGrantApplied) saveData();
@@ -1617,6 +1688,12 @@ function renderAll() {
   document.body.classList.toggle("reduce-motion", Boolean(state.reduceMotion));
   weeklyGoalInput.value = String(state.weeklyGoal);
   pinGraceInput.value = String(state.pinGraceMinutes);
+  if (timezoneSelect) {
+    timezoneSelect.value = state.timeConfig.fixedOffsetMinutes === null ? "" : String(state.timeConfig.fixedOffsetMinutes);
+  }
+  if (timezoneSummary) {
+    timezoneSummary.textContent = `当前：${timezoneOffsetText(state.timeConfig.fixedOffsetMinutes)}`;
+  }
   makeupWeeklyLimitInput.value = String(state.makeupConfig.weeklyLimit);
   if (makeupCardWeeklyInput) makeupCardWeeklyInput.value = String(state.makeupConfig.weeklyCardGrant || 0);
   makeupCountMilestoneToggle.checked = Boolean(state.makeupConfig.countForMilestone);
@@ -1628,6 +1705,12 @@ function renderAll() {
     makeupRuleSummary.textContent = `当前：每周最多补签 ${limit} 次，每周自动发卡 ${weeklyGrant} 张，库存 ${balance} 张，本周剩余 ${remain} 次（仅支持补昨天）`;
   }
   themeSelect.value = state.theme || "sunny";
+  if (bonusWeeklyLimitInput) {
+    bonusWeeklyLimitInput.value = String(state.bonusConfig.weeklyLimit || 30);
+  }
+  if (bonusLimitText) {
+    bonusLimitText.textContent = `本周额外奖励剩余：${getBonusRemainThisWeek()}⭐（每周上限 ${state.bonusConfig.weeklyLimit}⭐）`;
+  }
   renderAuthStatus();
   renderSyncStatus();
   renderRole();
@@ -1655,6 +1738,16 @@ function renderAll() {
     parentStarCount.classList.add("count-pop");
     lastRenderedStars = state.stars;
   }
+
+  if (activeInputState) {
+    const nextActive = document.getElementById(activeInputState.id);
+    if (nextActive instanceof HTMLInputElement) {
+      nextActive.focus({ preventScroll: true });
+      if (typeof activeInputState.start === "number" && typeof activeInputState.end === "number") {
+        nextActive.setSelectionRange(activeInputState.start, activeInputState.end);
+      }
+    }
+  }
 }
 
 roleSwitch.addEventListener("click", (event) => {
@@ -1663,9 +1756,9 @@ roleSwitch.addEventListener("click", (event) => {
     return;
   }
 
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) return;
-  const role = target.dataset.role;
+  const button = event.target instanceof Element ? event.target.closest("button") : null;
+  if (!(button instanceof HTMLButtonElement) || !roleSwitch.contains(button)) return;
+  const role = button.dataset.role;
   if (role !== "child" && role !== "parent") return;
 
   const parentUnlockValid = Date.now() < Number(state.parentUnlockUntil || 0);
@@ -1768,6 +1861,19 @@ reduceMotionToggle.addEventListener("change", () => {
   saveData();
   renderAll();
 });
+
+if (timezoneForm) {
+  timezoneForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    captureRestorePoint("修改家庭时区前");
+    const raw = String(timezoneSelect?.value || "").trim();
+    state.timeConfig.fixedOffsetMinutes = raw === "" ? null : Number(raw);
+    applyTimezoneConfig();
+    addHistory(`已更新家庭时区：${timezoneOffsetText(state.timeConfig.fixedOffsetMinutes)}`, 0, "system");
+    saveData();
+    renderAll();
+  });
+}
 
 if (streakFeatureToggle) {
   streakFeatureToggle.addEventListener("change", () => {
@@ -1878,14 +1984,28 @@ rewardForm.addEventListener("submit", (event) => {
   renderAll();
 });
 
-bonusForm.addEventListener("submit", (event) => {
+bonusForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const reason = bonusReason.value.trim();
   const stars = Number(bonusStars.value);
-  grantBonusByParent(reason, stars);
+  const ok = await grantBonusByParent(reason, stars);
+  if (!ok) return;
   bonusForm.reset();
   bonusStars.value = "1";
 });
+
+if (bonusLimitForm) {
+  bonusLimitForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const weeklyLimit = Number(bonusWeeklyLimitInput?.value || 0);
+    if (!Number.isFinite(weeklyLimit) || weeklyLimit < 1) return;
+    captureRestorePoint("修改额外奖励上限前");
+    state.bonusConfig.weeklyLimit = Math.round(weeklyLimit);
+    addHistory(`已更新每周额外奖励上限：${state.bonusConfig.weeklyLimit}⭐`, 0, "system");
+    saveData();
+    renderAll();
+  });
+}
 
 taskCancelEdit.addEventListener("click", clearTaskEdit);
 rewardCancelEdit.addEventListener("click", clearRewardEdit);
@@ -2051,17 +2171,17 @@ undoLastRatingBtn.addEventListener("click", () => {
 });
 
 childTaskList.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) return;
-  const taskId = target.dataset.childTaskSubmit;
+  const button = event.target instanceof Element ? event.target.closest("button") : null;
+  if (!(button instanceof HTMLButtonElement) || !childTaskList.contains(button)) return;
+  const taskId = button.dataset.childTaskSubmit;
   if (!taskId) return;
   await submitTaskByChild(taskId);
 });
 
 childRewardList.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) return;
-  const rewardId = target.dataset.childReward;
+  const button = event.target instanceof Element ? event.target.closest("button") : null;
+  if (!(button instanceof HTMLButtonElement) || !childRewardList.contains(button)) return;
+  const rewardId = button.dataset.childReward;
   if (!rewardId) return;
   await openRedeemModal(rewardId);
 });
@@ -2079,10 +2199,10 @@ redeemModal.addEventListener("click", (event) => {
 });
 
 parentPendingList.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) return;
+  const button = event.target instanceof Element ? event.target.closest("button") : null;
+  if (!(button instanceof HTMLButtonElement) || !parentPendingList.contains(button)) return;
 
-  const partialTaskId = target.dataset.parentPartial;
+  const partialTaskId = button.dataset.parentPartial;
   if (partialTaskId) {
     const input = parentPendingList.querySelector(`input[data-partial-input="${partialTaskId}"]`);
     const stars = Number(input?.value || 0);
@@ -2094,7 +2214,7 @@ parentPendingList.addEventListener("click", async (event) => {
     return;
   }
 
-  const rejectTaskId = target.dataset.parentReject;
+  const rejectTaskId = button.dataset.parentReject;
   if (rejectTaskId) {
     const reason = await showPrompt("请输入驳回原因", "请补充拍照凭证或任务细节", "驳回任务");
     if (reason === null) return;
@@ -2109,8 +2229,8 @@ parentPendingList.addEventListener("click", async (event) => {
     return;
   }
 
-  const taskId = target.dataset.parentRate;
-  const rating = target.dataset.rating;
+  const taskId = button.dataset.parentRate;
+  const rating = button.dataset.rating;
   if (!taskId || !rating) return;
   rateTaskByParent(taskId, rating);
 });
@@ -2144,10 +2264,10 @@ approveAllRemindBtn.addEventListener("click", () => {
 });
 
 parentTaskList.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) return;
+  const button = event.target instanceof Element ? event.target.closest("button") : null;
+  if (!(button instanceof HTMLButtonElement) || !parentTaskList.contains(button)) return;
 
-  const editId = target.dataset.parentTaskEdit;
+  const editId = button.dataset.parentTaskEdit;
   if (editId) {
     const task = state.tasks.find((item) => item.id === editId);
     if (!task) return;
@@ -2160,7 +2280,7 @@ parentTaskList.addEventListener("click", async (event) => {
     return;
   }
 
-  const deleteId = target.dataset.parentTaskDelete;
+  const deleteId = button.dataset.parentTaskDelete;
   if (deleteId) {
     const ok = await showConfirm("确认删除这个任务吗？", "删除任务");
     if (!ok) return;
@@ -2168,9 +2288,9 @@ parentTaskList.addEventListener("click", async (event) => {
     return;
   }
 
-  const moveId = target.dataset.parentTaskMove;
+  const moveId = button.dataset.parentTaskMove;
   if (moveId) {
-    const direction = target.dataset.direction;
+    const direction = button.dataset.direction;
     if (direction === "up" || direction === "down") {
       moveTask(moveId, direction);
     }
@@ -2178,10 +2298,10 @@ parentTaskList.addEventListener("click", async (event) => {
 });
 
 parentRewardList.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) return;
+  const button = event.target instanceof Element ? event.target.closest("button") : null;
+  if (!(button instanceof HTMLButtonElement) || !parentRewardList.contains(button)) return;
 
-  const editId = target.dataset.parentRewardEdit;
+  const editId = button.dataset.parentRewardEdit;
   if (editId) {
     const reward = state.rewards.find((item) => item.id === editId);
     if (!reward) return;
@@ -2195,7 +2315,7 @@ parentRewardList.addEventListener("click", async (event) => {
     return;
   }
 
-  const deleteId = target.dataset.parentRewardDelete;
+  const deleteId = button.dataset.parentRewardDelete;
   if (deleteId) {
     const ok = await showConfirm("确认删除这个奖励吗？", "删除奖励");
     if (!ok) return;
@@ -2203,9 +2323,9 @@ parentRewardList.addEventListener("click", async (event) => {
     return;
   }
 
-  const moveId = target.dataset.parentRewardMove;
+  const moveId = button.dataset.parentRewardMove;
   if (moveId) {
-    const direction = target.dataset.direction;
+    const direction = button.dataset.direction;
     if (direction === "up" || direction === "down") {
       moveReward(moveId, direction);
     }

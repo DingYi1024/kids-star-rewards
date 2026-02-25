@@ -1,6 +1,32 @@
 (function initDateUtils(globalObj) {
+  let fixedOffsetMinutes = null;
+
+  function normalizeOffsetMinutes(input) {
+    if (input === null || input === undefined || input === "") return null;
+    const parsed = Number(input);
+    if (!Number.isFinite(parsed)) return null;
+    const clamped = Math.max(-720, Math.min(840, Math.round(parsed)));
+    return clamped;
+  }
+
+  function setFixedOffsetMinutes(input) {
+    fixedOffsetMinutes = normalizeOffsetMinutes(input);
+    return fixedOffsetMinutes;
+  }
+
+  function getFixedOffsetMinutes() {
+    return fixedOffsetMinutes;
+  }
+
+  function nowWithConfiguredTimezone() {
+    if (fixedOffsetMinutes === null) return new Date();
+    const localNow = new Date();
+    const utcMs = localNow.getTime() + localNow.getTimezoneOffset() * 60 * 1000;
+    return new Date(utcMs + fixedOffsetMinutes * 60 * 1000);
+  }
+
   function todayKey() {
-    const now = new Date();
+    const now = nowWithConfiguredTimezone();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
@@ -8,7 +34,7 @@
   }
 
   function formatTodayLabel() {
-    const now = new Date();
+    const now = nowWithConfiguredTimezone();
     const weekNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -61,6 +87,8 @@
     daysBetween,
     pad2,
     buildMonthKey,
-    buildDayKey
+    buildDayKey,
+    setFixedOffsetMinutes,
+    getFixedOffsetMinutes
   };
 }(window));
