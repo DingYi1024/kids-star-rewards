@@ -1,109 +1,106 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#6a8bd6" />
-    <link rel="manifest" href="manifest.json" />
-    <title>星星积累小助手</title>
-    <link rel="stylesheet" href="assets/css/styles.css?v=20260225r" />
-  </head>
-  <body>
-    <div class="bg-shape bg-shape-a"></div>
-    <div class="bg-shape bg-shape-b"></div>
 
-    <main class="app">
-      <header class="hero">
-        <div class="hero-brand">
-          <h1>星星积累小助手</h1>
-          <p>孩子打卡，家长评分，成长看得见</p>
-        </div>
-        <small id="todayDateText" class="today-date">今天是 --</small>
-        <div class="hero-top-actions">
-          <div class="role-switch" id="roleSwitch">
-            <button class="role-btn" data-role="child">孩子界面</button>
-            <button class="role-btn" data-role="parent">家长界面</button>
-          </div>
-          <div id="authChip" class="auth-chip">
-            <small id="authUserText">未登录</small>
-            <button id="authOpenBtn" class="btn-soft auth-open-btn" type="button">账号</button>
-            <button id="authLogoutBtn" class="btn-ghost auth-logout-btn hidden" type="button">退出</button>
-          </div>
-          <select id="themeSelect" class="theme-select">
-            <option value="sunny">晴空主题</option>
-            <option value="ocean">海洋主题</option>
-            <option value="space">太空主题</option>
-            <option value="festival">节日主题</option>
-          </select>
-        </div>
-      </header>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#6a8bd6" />
+  <link rel="manifest" href="manifest.json" />
+  <title>星星积累小助手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260225u" />
+</head>
 
-      <section id="welcomePanel" class="panel">
-        <article class="card welcome-card">
-          <div class="welcome-hero">
-            <div class="welcome-copy">
-              <small class="welcome-kicker">STAR QUEST FOR FAMILY</small>
-              <h2>把每天的小任务<br />变成一场成长冒险</h2>
-              <p>不是催促，不是说教，而是让孩子看到自己每天在变得更好。登录后即可开启亲子协作模式。</p>
-              <div class="welcome-badges">
-                <span>任务挑战</span>
-                <span>亲子反馈</span>
-                <span>星星奖励</span>
-              </div>
-              <div class="welcome-actions">
-                <button id="welcomeAuthBtn" class="btn-active welcome-cta" type="button">开始登录 / 注册</button>
-                <span class="welcome-note">登录后即可开始今日任务与家长评分</span>
-              </div>
+<body>
+  <div class="bg-shape bg-shape-a"></div>
+  <div class="bg-shape bg-shape-b"></div>
+
+  <main class="app">
+    <header class="hero">
+      <div class="hero-brand">
+        <h1>星星积累小助手</h1>
+        <p>孩子打卡，家长评分，成长看得见</p>
+      </div>
+      <small id="todayDateText" class="today-date">今天是 --</small>
+      <div class="hero-top-actions">
+        <div class="role-switch" id="roleSwitch">
+          <button class="role-btn" data-role="child">孩子界面</button>
+          <button class="role-btn" data-role="parent">家长界面</button>
+        </div>
+        <div id="authChip" class="auth-chip">
+          <small id="authUserText">未登录</small>
+          <button id="authOpenBtn" class="btn-soft auth-open-btn" type="button">账号</button>
+          <button id="authLogoutBtn" class="btn-ghost auth-logout-btn hidden" type="button">退出</button>
+        </div>
+        <select id="themeSelect" class="theme-select">
+          <option value="sunny">晴空主题</option>
+          <option value="ocean">海洋主题</option>
+          <option value="space">太空主题</option>
+          <option value="festival">节日主题</option>
+        </select>
+      </div>
+    </header>
+
+    <section id="welcomePanel" class="panel">
+      <article class="card welcome-card">
+        <div class="welcome-hero">
+          <div class="welcome-copy">
+            <small class="welcome-kicker">STAR QUEST FOR FAMILY</small>
+            <h2>把每天的小任务<br />变成一场成长冒险</h2>
+            <p>不是催促，不是说教，而是让孩子看到自己每天在变得更好。登录后即可开启亲子协作模式。</p>
+            <div class="welcome-badges">
+              <span>任务挑战</span>
+              <span>亲子反馈</span>
+              <span>星星奖励</span>
             </div>
-            <div class="welcome-preview">
-              <div class="preview-top">
-                <div class="planet"></div>
-                <div class="preview-stat">
-                  <small>今日旅程进度</small>
-                  <strong>72%</strong>
-                </div>
-              </div>
-              <div class="preview-list">
-                <div><b>阅读20分钟</b><span>孩子提交</span></div>
-                <div><b>家长评分</b><span>+2⭐ 入账</span></div>
-                <div><b>兑换奖励</b><span>-8⭐ 已兑换</span></div>
-              </div>
-              <div class="preview-footer">
-                <span>累计连胜：12 天</span>
-                <span>本周净增长：+18⭐</span>
-              </div>
+            <div class="welcome-actions">
+              <button id="welcomeAuthBtn" class="btn-active welcome-cta" type="button">开始登录 / 注册</button>
+              <span class="welcome-note">登录后即可开始今日任务与家长评分</span>
             </div>
           </div>
+          <div class="welcome-preview">
+            <div class="preview-top">
+              <div class="planet"></div>
+              <div class="preview-stat">
+                <small>今日旅程进度</small>
+                <strong>72%</strong>
+              </div>
+            </div>
+            <div class="preview-list">
+              <div><b>阅读20分钟</b><span>孩子提交</span></div>
+              <div><b>家长评分</b><span>+2⭐ 入账</span></div>
+              <div><b>兑换奖励</b><span>-8⭐ 已兑换</span></div>
+            </div>
+            <div class="preview-footer">
+              <span>累计连胜：12 天</span>
+              <span>本周净增长：+18⭐</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section id="childPanel" class="panel">
+      <div id="childTopGrid" class="child-top-grid">
+        <article class="card">
+          <h2>我的星星</h2>
+          <div class="star-panel">
+            <span>钱包⭐</span>
+            <strong id="childStarCount">0</strong>
+          </div>
+          <small id="bankSummaryText">🏦 银行：0⭐ | 预计利息 +0⭐/周</small>
         </article>
-      </section>
 
-      <section id="childPanel" class="panel">
-        <div id="childTopGrid" class="child-top-grid">
-          <article class="card">
-            <h2>我的星星</h2>
-            <div class="star-panel">
-              <span>钱包⭐</span>
-              <strong id="childStarCount">0</strong>
-            </div>
-            <small id="bankSummaryText">银行：0⭐ | 下周预计利息 +0⭐</small>
-            <form id="bankActionForm" class="inline-form compact-form">
-              <select id="bankActionType">
-                <option value="deposit">存入银行</option>
-                <option value="withdraw">从银行取出</option>
-              </select>
-              <input id="bankActionAmount" type="number" min="1" value="1" placeholder="星星数量" />
-              <button type="submit">执行</button>
-            </form>
-          </article>
-
-          <article id="childStreakCard" class="card">
-            <h2>连续打卡</h2>
-            <div class="streak-wrap">
-              <span id="openStreakText" class="streak-badge">连续打卡 1 天</span>
-              <small id="streakHintText">继续保持，明天再来打卡！</small>
-              <small id="makeupInfoText">本周补签剩余 1 次</small>
-              <button id="toggleStreakDetailsBtn" class="btn-ghost streak-details-btn" type="button">展开打卡详情</button>
-              <div id="streakDetailPanel" class="hidden">
+        <article id="childStreakCard" class="card">
+          <h2>连续打卡</h2>
+          <div class="streak-wrap">
+            <span id="openStreakText" class="streak-badge">连续打卡 1 天</span>
+            <small id="streakHintText">继续保持，明天再来打卡！</small>
+            <small id="makeupInfoText">本周补签剩余 1 次</small>
+            <button id="toggleStreakDetailsBtn" class="btn-ghost streak-details-btn" type="button">展开打卡详情</button>
+            <div id="streakDetailPanel" class="hidden">
               <div class="streak-stats">
                 <small id="monthCheckinText">本月打卡：0 天</small>
                 <small id="monthMakeupText">本月补签：0 天</small>
@@ -123,82 +120,105 @@
                 </div>
                 <div id="streakHeatmap" class="streak-heatmap hidden"></div>
               </div>
-              </div>
             </div>
-          </article>
+          </div>
+        </article>
 
-          <article class="card">
-            <h2>本周进度</h2>
-            <div class="goal-wrap">
-              <small id="weeklyGoalText">本周进度：0/20⭐</small>
-              <div class="goal-bar"><div id="weeklyGoalBar" class="goal-fill"></div></div>
-              <small id="goalMotivateText">再努力一点就能达标！</small>
-              <small id="goalChestText">周目标宝箱：未达成</small>
-              <button id="claimGoalChestBtn" class="btn-soft" type="button">领取本周目标宝箱</button>
+        <article class="card">
+          <h2>本周进度</h2>
+          <div class="goal-wrap">
+            <small id="weeklyGoalText">本周进度：0/20⭐</small>
+            <div class="goal-bar">
+              <div id="weeklyGoalBar" class="goal-fill"></div>
             </div>
-          </article>
-        </div>
+            <small id="goalMotivateText">再努力一点就能达标！</small>
+            <small id="goalChestText">周目标宝箱：未达成</small>
+            <button id="claimGoalChestBtn" class="btn-soft" type="button">领取本周目标宝箱</button>
+          </div>
+        </article>
+      </div>
 
-        <div class="grid">
-          <article class="card">
-            <h2>今日任务</h2>
-            <small id="todayTaskSummary">今天已完成 0/0 项</small>
-            <ul id="childTaskList" class="list"></ul>
-          </article>
+      <article class="card" id="childBankCard">
+        <h2>🏦 星星银行</h2>
+        <small id="bankRulesInline" class="setting-note">最低存入 5⭐ · 周利率 10%（上限 5⭐）· 7天内取出罚10% · 满7天免罚</small>
+        <form id="bankActionForm" class="inline-form compact-form">
+          <select id="bankActionType">
+            <option value="deposit">存入银行</option>
+            <option value="withdraw">从银行取出</option>
+          </select>
+          <input id="bankActionAmount" type="number" min="1" value="5" placeholder="星星数量" />
+          <button type="submit">执行</button>
+        </form>
+      </article>
 
-          <article class="card">
-            <h2>奖励兑换</h2>
-            <ul id="childRewardList" class="list"></ul>
-            <div id="gachaBoxWrap" class="gacha-box-wrap">
-              <small id="gachaHintText">盲盒：每次消耗 5⭐，随机获得奖励</small>
-              <button id="gachaDrawBtn" class="btn-soft" type="button">抽盲盒</button>
-            </div>
-          </article>
-        </div>
+      <div class="grid">
+        <article class="card">
+          <h2>今日任务</h2>
+          <small id="todayTaskSummary">今天已完成 0/0 项</small>
+          <ul id="childTaskList" class="list"></ul>
+          <div id="childTaskEmpty" class="empty-state hidden">🌟 今天没有任务，休息一下吧！</div>
+        </article>
 
-      </section>
+        <article class="card">
+          <h2>奖励兑换</h2>
+          <ul id="childRewardList" class="list"></ul>
+          <div id="gachaBoxWrap" class="gacha-box-wrap">
+            <small id="gachaHintText">盲盒：每次消耗 5⭐，随机获得奖励</small>
+            <button id="gachaDrawBtn" class="btn-soft" type="button">抽盲盒</button>
+          </div>
+        </article>
+      </div>
 
-      <section id="parentPanel" class="panel hidden">
-        <div class="parent-top-grid">
-          <article class="card">
-            <h2>钱包星星</h2>
-            <div class="star-panel">
-              <span>可用⭐</span>
-              <strong id="parentStarCount">0</strong>
-            </div>
-          </article>
+    </section>
 
-          <article class="card">
-            <h2>每周目标</h2>
-            <form id="goalForm" class="inline-form goal-form">
-              <input id="weeklyGoalInput" type="number" min="5" max="100" value="20" required />
-              <button type="submit">保存目标</button>
+    <section id="parentPanel" class="panel hidden">
+      <nav class="parent-tabs">
+        <button class="parent-tab active" data-tab="today">📋 今日</button>
+        <button class="parent-tab" data-tab="manage">⚙️ 管理</button>
+        <button class="parent-tab" data-tab="settings">🔧 设置</button>
+      </nav>
+
+      <div class="parent-top-grid">
+        <article class="card">
+          <h2>钱包星星</h2>
+          <div class="star-panel">
+            <span>可用⭐</span>
+            <strong id="parentStarCount">0</strong>
+          </div>
+        </article>
+
+        <article class="card parent-goal-card">
+          <h2>每周目标</h2>
+          <form id="goalForm" class="inline-form goal-form tidy-form">
+            <input id="weeklyGoalInput" type="number" min="5" max="100" value="20" required />
+            <button type="submit" class="btn-soft">保存目标</button>
+          </form>
+          <form id="goalChestForm" class="inline-form goal-chest-form tidy-form">
+            <input id="goalChestTitleInput" type="text" maxlength="30" placeholder="目标宝箱（如：游乐园）" />
+            <input id="goalChestStarsInput" type="number" min="0" max="50" value="3" title="额外奖励星星" />
+            <button type="submit" class="btn-soft">保存</button>
+          </form>
+          <small id="goalChestParentText" class="setting-note">达成每周目标后，孩子可领取目标宝箱。</small>
+        </article>
+
+        <article class="card parent-security-card">
+          <h2>家长安全</h2>
+          <small class="setting-note">说明：账号用于跨设备登录；PIN仅用于本设备防止孩子误进家长后台。</small>
+          <div class="stack-block">
+            <form id="pinForm" class="inline-form pin-form tidy-form">
+              <input id="pinInput" type="password" maxlength="8" placeholder="家长PIN (4-8位)" />
+              <button type="submit" class="btn-soft">保存</button>
+              <button type="button" id="pinOffBtn" class="btn-ghost">关闭</button>
             </form>
-            <form id="goalChestForm" class="inline-form goal-form">
-              <input id="goalChestTitleInput" type="text" maxlength="30" placeholder="目标宝箱名称（如：周末特别奖励）" />
-              <input id="goalChestStarsInput" type="number" min="0" max="50" value="3" />
-              <button type="submit">保存目标宝箱</button>
+            <form id="pinGraceForm" class="inline-form goal-form tidy-form">
+              <input id="pinGraceInput" type="number" min="0" max="120" value="5" placeholder="免输密码(分钟)" />
+              <button type="submit" class="btn-soft">保存</button>
             </form>
-            <small id="goalChestParentText" class="setting-note">达成每周目标后，孩子可领取目标宝箱。</small>
-          </article>
+          </div>
+        </article>
+      </div>
 
-          <article class="card">
-            <h2>家长安全</h2>
-            <small class="setting-note">说明：账号用于跨设备登录；PIN仅用于本设备防止孩子误进家长后台。</small>
-            <div class="stack-block">
-              <form id="pinForm" class="inline-form pin-form">
-                <input id="pinInput" type="password" maxlength="8" placeholder="设置本设备家长PIN（4-8位）" />
-                <button type="submit">保存设备PIN</button>
-                <button type="button" id="pinOffBtn" class="btn-ghost">关闭PIN</button>
-              </form>
-              <form id="pinGraceForm" class="inline-form goal-form">
-                <input id="pinGraceInput" type="number" min="0" max="120" value="5" placeholder="PIN免输分钟（同设备）" />
-                <button type="submit">保存免输时长</button>
-              </form>
-            </div>
-          </article>
-        </div>
-
+      <div id="parentTabSettings" class="parent-tab-content hidden">
         <article class="card">
           <h2>系统与补签设置</h2>
           <div class="setting-highlight">
@@ -216,7 +236,7 @@
                   <option value="-300">美东 UTC-5</option>
                   <option value="60">中欧 UTC+1</option>
                 </select>
-                <button type="submit">保存家庭时区</button>
+                <button type="submit" class="btn-soft">保存时区</button>
               </form>
               <small id="timezoneSummary" class="setting-note">当前：跟随设备时区</small>
               <small id="syncStatusText">同步模式：服务器SQLite</small>
@@ -224,11 +244,12 @@
             <div id="makeupSettingsCol" class="settings-col">
               <form id="makeupConfigForm" class="inline-form goal-form">
                 <input id="makeupWeeklyLimitInput" type="number" min="0" max="7" value="1" placeholder="每周可补签次数（0-7）" />
-                <button type="submit">保存每周次数</button>
+                <button type="submit" class="btn-soft">保存次数</button>
               </form>
               <form id="makeupCardWeeklyForm" class="inline-form goal-form">
-                <input id="makeupCardWeeklyInput" type="number" min="0" max="7" value="1" placeholder="每周自动发放补签卡（0-7）" />
-                <button type="submit">保存每周发卡</button>
+                <input id="makeupCardWeeklyInput" type="number" min="0" max="7" value="1"
+                  placeholder="每周自动发放补签卡（0-7）" />
+                <button type="submit" class="btn-soft">保存发卡</button>
               </form>
               <form id="makeupCardGrantForm" class="inline-form goal-form">
                 <input id="makeupCardGrantInput" type="number" min="1" max="20" value="1" placeholder="临时奖励补签卡（张）" />
@@ -240,13 +261,24 @@
             </div>
           </div>
         </article>
+      </div><!-- end parentTabSettings -->
 
+      <div id="parentTabManage" class="parent-tab-content hidden">
         <article class="card">
           <h2>星星银行</h2>
+          <label class="inline-check"><input id="bankEnabledToggle" type="checkbox" checked />
+            启用银行功能（关闭后孩子界面不显示银行）</label>
+          <small class="setting-note">存入的星星每周产生利息（复利），但提前取出会扣手续费，教孩子延迟满足。</small>
           <form id="bankConfigForm" class="inline-form compact-form">
-            <input id="bankRateInput" type="number" min="0" max="10" step="0.1" value="1" placeholder="周利率%" />
-            <input id="bankCapInput" type="number" min="1" max="100" value="20" placeholder="周利息上限⭐" />
-            <button type="submit">保存银行规则</button>
+            <input id="bankRateInput" type="number" min="0" max="50" step="1" value="10" placeholder="周利率%" />
+            <input id="bankCapInput" type="number" min="1" max="100" value="5" placeholder="利息上限⭐" />
+            <button type="submit" class="btn-soft">保存利息规则</button>
+          </form>
+          <form id="bankPenaltyForm" class="inline-form compact-form">
+            <input id="bankMinDepositInput" type="number" min="1" max="50" value="5" placeholder="最低存入⭐" />
+            <input id="bankPenaltyPercentInput" type="number" min="0" max="50" value="10" placeholder="提前取出罚%" />
+            <input id="bankPenaltyDaysInput" type="number" min="0" max="30" value="7" placeholder="免罚天数" />
+            <button type="submit" class="btn-soft">保存取出规则</button>
           </form>
           <label class="inline-check"><input id="bankWithdrawToggle" type="checkbox" checked /> 允许孩子自由取出</label>
           <small id="bankRuleSummary" class="setting-note">银行规则：每周结算一次利息。</small>
@@ -261,7 +293,7 @@
           </form>
           <form id="bonusLimitForm" class="inline-form goal-form">
             <input id="bonusWeeklyLimitInput" type="number" min="1" max="300" value="30" placeholder="每周额外奖励上限" />
-            <button type="submit">保存每周上限</button>
+            <button type="submit" class="btn-soft">保存上限</button>
           </form>
           <small id="bonusLimitText" class="setting-note">本周额外奖励剩余：0⭐</small>
         </article>
@@ -294,19 +326,20 @@
             <form id="dynamicPricingForm" class="inline-form compact-form">
               <input id="hotStockThresholdInput" type="number" min="1" max="10" value="1" placeholder="热抢阈值(剩余<=N)" />
               <input id="hotMarkupPercentInput" type="number" min="0" max="100" value="20" placeholder="热抢加价%" />
-              <button type="submit">保存热抢规则</button>
+              <button type="submit" class="btn-soft">保存热抢规则</button>
             </form>
             <small id="dynamicPricingSummary" class="setting-note">热抢说明：库存剩余较少时自动加价。</small>
             <hr class="section-divider" />
             <form id="gachaConfigForm" class="inline-form goal-form">
               <input id="gachaCostInput" type="number" min="1" max="50" value="5" placeholder="盲盒消耗⭐" />
-              <button type="submit">保存盲盒消耗</button>
+              <button type="submit" class="btn-soft">保存盲盒消耗</button>
             </form>
             <label class="inline-check"><input id="gachaEnabledToggle" type="checkbox" checked /> 开启任务盲盒</label>
             <small id="gachaRuleSummary" class="setting-note">盲盒说明：每次消耗固定星星，从奖池按权重随机抽取。</small>
             <details class="rule-details">
               <summary>编辑盲盒奖池（高级）</summary>
-              <small id="gachaPoolHelp" class="setting-note">格式说明：每行一项，写成「名称|星星|权重」。名称=抽到后显示文字；星星=额外加分（可填0）；权重=抽中比例（数字越大越容易中）。</small>
+              <small id="gachaPoolHelp"
+                class="setting-note">格式说明：每行一项，写成「名称|星星|权重」。名称=抽到后显示文字；星星=额外加分（可填0）；权重=抽中比例（数字越大越容易中）。</small>
               <small class="setting-note">示例：棒棒糖|0|3（约3份概率） / 再得2星|2|2（约2份概率） / 再来一次|0|1（约1份概率）</small>
               <textarea id="gachaPoolInput" rows="4" placeholder="盲盒奖池，每行：名称|星星|权重，例如：棒棒糖|0|3"></textarea>
               <button id="saveGachaPoolBtn" class="btn-soft" type="button">保存盲盒奖池</button>
@@ -318,6 +351,9 @@
           </article>
         </div>
 
+      </div><!-- end parentTabManage -->
+
+      <div id="parentTabToday" class="parent-tab-content">
         <article class="card">
           <h2>行为统计</h2>
           <select id="statsRange" class="filter-select">
@@ -337,6 +373,7 @@
             <button id="approveAllRemindBtn" class="btn-remind" type="button">一键全部提醒</button>
           </div>
           <ul id="parentPendingList" class="list"></ul>
+          <div id="pendingEmpty" class="empty-state hidden">🎉 暂无待评分任务，孩子今天的表现已全部审阅</div>
         </article>
 
         <article class="card">
@@ -352,6 +389,7 @@
             <option value="audit">审计</option>
           </select>
           <ul id="parentHistoryList" class="history"></ul>
+          <div id="historyEmpty" class="empty-state hidden">📝 还没有记录，完成第一个任务后就会出现在这里</div>
           <div class="action-row">
             <button id="exportBtn" type="button">导出数据</button>
             <button id="exportCsvBtn" type="button" class="btn-soft">导出CSV</button>
@@ -363,67 +401,69 @@
             <button id="restorePointBtn" type="button" class="btn-ghost">恢复到该时间点</button>
           </div>
         </article>
-      </section>
-    </main>
+      </div><!-- end parentTabToday -->
+    </section>
+  </main>
 
-    <div id="redeemModal" class="modal hidden">
-      <div class="modal-card">
-        <h3>确认兑换</h3>
-        <p id="redeemModalText"></p>
-        <div class="modal-actions">
-          <button id="redeemConfirmBtn" class="btn-active">确认兑换</button>
-          <button id="redeemCancelBtn" class="btn-passive">取消</button>
-        </div>
+  <div id="redeemModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>确认兑换</h3>
+      <p id="redeemModalText"></p>
+      <div class="modal-actions">
+        <button id="redeemConfirmBtn" class="btn-active">确认兑换</button>
+        <button id="redeemCancelBtn" class="btn-passive">取消</button>
       </div>
     </div>
+  </div>
 
-    <div id="pinModal" class="modal hidden">
-      <div class="modal-card pin-modal-card">
-        <h3 class="pin-title">🔐 家长验证</h3>
-        <p class="pin-desc">请输入本设备家长PIN后进入管理界面</p>
-        <input id="pinVerifyInput" type="password" maxlength="8" placeholder="输入PIN" />
-        <div class="modal-actions">
-          <button id="pinVerifyBtn" class="btn-active">进入家长界面</button>
-          <button id="pinCancelBtn" class="btn-passive">取消</button>
-        </div>
+  <div id="pinModal" class="modal hidden">
+    <div class="modal-card pin-modal-card">
+      <h3 class="pin-title">🔐 家长验证</h3>
+      <p class="pin-desc">请输入本设备家长PIN后进入管理界面</p>
+      <input id="pinVerifyInput" type="password" maxlength="8" placeholder="输入PIN" />
+      <div class="modal-actions">
+        <button id="pinVerifyBtn" class="btn-active">进入家长界面</button>
+        <button id="pinCancelBtn" class="btn-passive">取消</button>
       </div>
     </div>
+  </div>
 
-    <div id="uiModal" class="modal hidden">
-      <div class="modal-card ui-modal-card">
-        <h3 id="uiModalTitle">提示</h3>
-        <p id="uiModalMessage"></p>
-        <input id="uiModalInput" class="hidden" type="text" />
-        <div class="modal-actions">
-          <button id="uiModalConfirmBtn" class="btn-active">确认</button>
-          <button id="uiModalCancelBtn" class="btn-passive">取消</button>
-        </div>
+  <div id="uiModal" class="modal hidden">
+    <div class="modal-card ui-modal-card">
+      <h3 id="uiModalTitle">提示</h3>
+      <p id="uiModalMessage"></p>
+      <input id="uiModalInput" class="hidden" type="text" />
+      <div class="modal-actions">
+        <button id="uiModalConfirmBtn" class="btn-active">确认</button>
+        <button id="uiModalCancelBtn" class="btn-passive">取消</button>
       </div>
     </div>
+  </div>
 
-    <div id="authModal" class="modal hidden">
-      <div class="modal-card auth-modal-card">
-        <div class="auth-mode-switch">
-          <button id="authModeLoginBtn" class="btn-ghost" type="button">登录</button>
-          <button id="authModeRegisterBtn" class="btn-ghost" type="button">注册</button>
-        </div>
-        <h3 id="authModalTitleText">登录账号</h3>
-        <p id="authModalDescText">同一账号可在不同设备同步同一份成长数据。</p>
-        <input id="authUsernameInput" type="text" maxlength="24" placeholder="用户名（3-24位）" />
-        <input id="authPasswordInput" type="password" maxlength="64" placeholder="密码（至少6位）" />
-        <small id="authHintText" class="auth-hint">没有账号？点击下方切换到注册。</small>
-        <div class="modal-actions">
-          <button id="authSubmitBtn" class="btn-active" type="button">登录</button>
-          <button id="authSwitchBtn" class="btn-soft" type="button">去注册</button>
-          <button id="authCancelBtn" class="btn-passive" type="button">取消</button>
-        </div>
+  <div id="authModal" class="modal hidden">
+    <div class="modal-card auth-modal-card">
+      <div class="auth-mode-switch">
+        <button id="authModeLoginBtn" class="btn-ghost" type="button">登录</button>
+        <button id="authModeRegisterBtn" class="btn-ghost" type="button">注册</button>
+      </div>
+      <h3 id="authModalTitleText">登录账号</h3>
+      <p id="authModalDescText">同一账号可在不同设备同步同一份成长数据。</p>
+      <input id="authUsernameInput" type="text" maxlength="24" placeholder="用户名（3-24位）" />
+      <input id="authPasswordInput" type="password" maxlength="64" placeholder="密码（至少6位）" />
+      <small id="authHintText" class="auth-hint">没有账号？点击下方切换到注册。</small>
+      <div class="modal-actions">
+        <button id="authSubmitBtn" class="btn-active" type="button">登录</button>
+        <button id="authSwitchBtn" class="btn-soft" type="button">去注册</button>
+        <button id="authCancelBtn" class="btn-passive" type="button">取消</button>
       </div>
     </div>
+  </div>
 
-    <script src="assets/js/date-utils.js?v=20260225r"></script>
-    <script src="assets/js/store.js?v=20260225r"></script>
-    <script src="assets/js/sync-auth-client.js?v=20260225r"></script>
-    <script src="assets/js/modals.js?v=20260225r"></script>
-    <script src="assets/js/app.js?v=20260225r"></script>
-  </body>
+  <script src="assets/js/date-utils.js?v=20260225u"></script>
+  <script src="assets/js/store.js?v=20260225u"></script>
+  <script src="assets/js/sync-auth-client.js?v=20260225u"></script>
+  <script src="assets/js/modals.js?v=20260225u"></script>
+  <script src="assets/js/app.js?v=20260225u"></script>
+</body>
+
 </html>
