@@ -2452,8 +2452,7 @@ async function bootstrapServerState() {
   }
 
   if (String(result.message || "").includes("暂无") || String(result.message || "").includes("no state")) {
-    const pushed = await syncAdapter.push();
-    setSyncStatus(pushed.ok ? "初始化上传成功" : "初始化上传失败");
+    setSyncStatus("服务器暂无数据（已暂停自动初始化上传）");
     saveData({ markPending: false });
     renderAll();
   }
