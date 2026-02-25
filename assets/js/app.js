@@ -391,6 +391,7 @@ const gachaRuleSummary = document.querySelector("#gachaRuleSummary");
 const gachaPoolInput = document.querySelector("#gachaPoolInput");
 const saveGachaPoolBtn = document.querySelector("#saveGachaPoolBtn");
 const gachaPoolSummary = document.querySelector("#gachaPoolSummary");
+const gachaPoolPreview = document.querySelector("#gachaPoolPreview");
 const rewardSubmitBtn = document.querySelector("#rewardSubmitBtn");
 const rewardCancelEdit = document.querySelector("#rewardCancelEdit");
 const parentRewardList = document.querySelector("#parentRewardList");
@@ -664,6 +665,23 @@ function parseGachaPoolText(rawText) {
     parsed.push({ id: crypto.randomUUID(), name, stars, weight });
   }
   return parsed.slice(0, 20);
+}
+
+function gachaPoolPreviewText() {
+  const pool = Array.isArray(state.gachaConfig?.pool) ? state.gachaConfig.pool : [];
+  if (!pool.length) return "当前概率预览：暂无";
+  const totalWeight = pool.reduce((sum, item) => sum + Math.max(1, Number(item.weight || 1)), 0);
+  const preview = pool
+    .slice(0, 5)
+    .map((item) => {
+      const weight = Math.max(1, Number(item.weight || 1));
+      const ratio = Math.round((weight / totalWeight) * 100);
+      const stars = Math.max(0, Number(item.stars || 0));
+      return `${item.name}${stars > 0 ? `(+${stars}⭐)` : ""}≈${ratio}%`;
+    })
+    .join(" / ");
+  const more = pool.length > 5 ? ` 等${pool.length}项` : "";
+  return `当前概率预览：${preview}${more}`;
 }
 
 function getMakeupRemainThisWeek() {
@@ -2026,6 +2044,9 @@ function renderAll() {
   if (gachaPoolSummary) {
     const poolCount = Array.isArray(state.gachaConfig.pool) ? state.gachaConfig.pool.length : 0;
     gachaPoolSummary.textContent = `当前盲盒奖池：${poolCount} 项 | 消耗 ${state.gachaConfig.cost}⭐`;
+  }
+  if (gachaPoolPreview) {
+    gachaPoolPreview.textContent = gachaPoolPreviewText();
   }
   if (gachaBoxWrap && gachaHintText && gachaDrawBtn) {
     gachaBoxWrap.classList.toggle("hidden", !state.gachaConfig.enabled);
