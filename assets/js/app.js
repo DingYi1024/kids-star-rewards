@@ -25,6 +25,8 @@ const defaultData = {
     stars: 3
   },
   weeklyGoalChestClaimedByWeek: {},
+  unclaimedGoalChests: [],
+  weeklyGoalRolloverCursor: "",
   openStreakCount: 0,
   openStreakLastDay: "",
   streakMilestoneAwardDays: {},
@@ -54,7 +56,12 @@ const defaultData = {
     autoPush: true,
     pendingChanges: false,
     lastSyncAt: 0,
-    lastSyncStatus: "未同步"
+    lastSyncStatus: "未同步",
+    version: 0
+  },
+  security: {
+    tamperLocked: false,
+    tamperDetectedAt: 0
   },
   timeConfig: {
     fixedOffsetMinutes: null
@@ -116,7 +123,7 @@ if (!store) {
   throw new Error("KSRStore not loaded");
 }
 
-const { state, persist } = store;
+const { state, persist, meta: storeMeta } = store;
 
 const syncClient = window.KSRSyncAuth?.createClient?.({
   authTokenKey: AUTH_TOKEN_KEY,
@@ -159,6 +166,18 @@ function normalizeDataShape() {
   if (!state.weeklyGoalChestClaimedByWeek || typeof state.weeklyGoalChestClaimedByWeek !== "object") {
     state.weeklyGoalChestClaimedByWeek = {};
   }
+  if (!Array.isArray(state.unclaimedGoalChests)) state.unclaimedGoalChests = [];
+  state.unclaimedGoalChests = state.unclaimedGoalChests
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      weekKey: String(item.weekKey || ""),
+      title: String(item.title || "周目标宝箱"),
+      stars: Math.max(0, Number(item.stars || 0)),
+      createdAt: Number(item.createdAt || Date.now())
+    }))
+    .slice(0, 24);
+  if (typeof state.weeklyGoalRolloverCursor !== "string") state.weeklyGoalRolloverCursor = "";
   if (typeof state.openStreakCount !== "number" || state.openStreakCount < 0) state.openStreakCount = 0;
   if (typeof state.openStreakLastDay !== "string") state.openStreakLastDay = "";
   if (!state.streakMilestoneAwardDays || typeof state.streakMilestoneAwardDays !== "object") state.streakMilestoneAwardDays = {};
@@ -193,7 +212,13 @@ function normalizeDataShape() {
   if (typeof state.serverSync.lastSyncAt !== "number" || state.serverSync.lastSyncAt < 0) state.serverSync.lastSyncAt = 0;
   if (typeof state.serverSync.lastSyncStatus !== "string") state.serverSync.lastSyncStatus = "未同步";
   if (typeof state.serverSync.version !== "number" || state.serverSync.version < 0) state.serverSync.version = 0;
-  if (typeof state.serverSync.version !== "number" || state.serverSync.version < 0) state.serverSync.version = 0;
+  if (!state.security || typeof state.security !== "object") {
+    state.security = { tamperLocked: false, tamperDetectedAt: 0 };
+  }
+  state.security.tamperLocked = Boolean(state.security.tamperLocked);
+  if (typeof state.security.tamperDetectedAt !== "number" || state.security.tamperDetectedAt < 0) {
+    state.security.tamperDetectedAt = 0;
+  }
   if (!state.timeConfig || typeof state.timeConfig !== "object") state.timeConfig = { fixedOffsetMinutes: null };
   if (!Object.hasOwn(state.timeConfig, "fixedOffsetMinutes")) state.timeConfig.fixedOffsetMinutes = null;
   if (state.timeConfig.fixedOffsetMinutes !== null) {
@@ -396,6 +421,8 @@ const weeklyGoalBar = document.querySelector("#weeklyGoalBar");
 const goalMotivateText = document.querySelector("#goalMotivateText");
 const goalChestText = document.querySelector("#goalChestText");
 const claimGoalChestBtn = document.querySelector("#claimGoalChestBtn");
+const carryoverChestWrap = document.querySelector("#carryoverChestWrap");
+const carryoverChestList = document.querySelector("#carryoverChestList");
 
 const childTaskList = document.querySelector("#childTaskList");
 const childRewardList = document.querySelector("#childRewardList");
@@ -463,6 +490,8 @@ const goalChestParentText = document.querySelector("#goalChestParentText");
 const pinForm = document.querySelector("#pinForm");
 const pinInput = document.querySelector("#pinInput");
 const pinOffBtn = document.querySelector("#pinOffBtn");
+const tamperLockNotice = document.querySelector("#tamperLockNotice");
+const tamperUnlockBtn = document.querySelector("#tamperUnlockBtn");
 const pinGraceForm = document.querySelector("#pinGraceForm");
 const pinGraceInput = document.querySelector("#pinGraceInput");
 const soundToggle = document.querySelector("#soundToggle");
@@ -669,6 +698,7 @@ if (!todayKey || !formatTodayLabel || !weekStartKey || !shiftDay || !daysBetween
 
 applyTimezoneConfig();
 if (!state.bank.lastInterestWeek) state.bank.lastInterestWeek = weekStartKey();
+if (!state.weeklyGoalRolloverCursor) state.weeklyGoalRolloverCursor = weekStartKey();
 
 function weeklyEarned() {
   const start = weekStartKey();
@@ -690,6 +720,60 @@ function isWeeklyGoalReached() {
 
 function hasClaimedWeeklyGoalChest(weekKey = currentWeekKey()) {
   return Boolean(state.weeklyGoalChestClaimedByWeek?.[weekKey]);
+}
+
+function weeklyEarnedForWeek(weekKey) {
+  let total = 0;
+  for (let i = 0; i < 7; i += 1) {
+    const day = shiftDay(weekKey, i);
+    total += Number(state.earningsByDay[day] || 0);
+  }
+  return total;
+}
+
+function rolloverUnclaimedWeeklyGoalChest() {
+  const currentWeek = currentWeekKey();
+  if (!state.weeklyGoalRolloverCursor) {
+    state.weeklyGoalRolloverCursor = currentWeek;
+    return false;
+  }
+
+  let changed = false;
+  let cursor = state.weeklyGoalRolloverCursor;
+  while (cursor < currentWeek) {
+    const reached = weeklyEarnedForWeek(cursor) >= Math.max(5, Number(state.weeklyGoal || 20));
+    const claimed = Boolean(state.weeklyGoalChestClaimedByWeek?.[cursor]);
+    const queued = state.unclaimedGoalChests.some((item) => item.weekKey === cursor);
+    if (reached && !claimed && !queued) {
+      state.unclaimedGoalChests.unshift({
+        id: crypto.randomUUID(),
+        weekKey: cursor,
+        title: String(state.weeklyGoalChest?.title || "周目标宝箱"),
+        stars: Math.max(0, Number(state.weeklyGoalChest?.stars || 0)),
+        createdAt: Date.now()
+      });
+      addHistory(`已保留上周未领取宝箱（${cursor}）`, 0, "system", { actor: "system" });
+      addAudit("上周目标宝箱自动保留", 0, "system", {
+        actor: "system",
+        action: "weekly_goal_chest_rollover",
+        detail: `week:${cursor}`
+      });
+      changed = true;
+    }
+    cursor = shiftDay(cursor, 7);
+  }
+  state.weeklyGoalRolloverCursor = currentWeek;
+  return changed;
+}
+
+function isSecurityLocked() {
+  return Boolean(state.security?.tamperLocked);
+}
+
+async function ensureSecurityUnlocked(actionText = "该操作") {
+  if (!isSecurityLocked()) return true;
+  await showAlert(`检测到本地数据异常，星星资产已冻结，暂不能执行${actionText}。请家长在“家长安全”里确认解锁。`, "安全锁定");
+  return false;
 }
 
 function dayDiff(fromDateKey, toDateKey) {
@@ -865,6 +949,7 @@ function estimateWeeklyBankInterest() {
 }
 
 function settleBankInterestIfNeeded() {
+  if (isSecurityLocked()) return false;
   const nowWeek = weekStartKey();
   if (!state.bank.lastInterestWeek) {
     state.bank.lastInterestWeek = nowWeek;
@@ -897,6 +982,7 @@ function settleBankInterestIfNeeded() {
 }
 
 async function moveStarsByBank(action, amount) {
+  if (!await ensureSecurityUnlocked("银行操作")) return;
   const stars = Math.floor(Number(amount || 0));
   if (!Number.isFinite(stars) || stars < 1) {
     await showAlert("请输入正确的星星数量。", "操作失败");
@@ -1054,6 +1140,7 @@ function refreshStreakFromCheckins() {
 }
 
 async function tryUseMakeupCard() {
+  if (!await ensureSecurityUnlocked("补签")) return;
   ensureWeeklyMakeupCardGrant();
   const cardBalance = Number(state.makeupCardBalance || 0);
   if (cardBalance <= 0) {
@@ -1119,6 +1206,7 @@ function addAudit(text, delta = 0, type = "system", options = {}) {
 }
 
 function awardStars(stars, type, text) {
+  if (isSecurityLocked()) return;
   if (!Number.isFinite(stars) || stars <= 0) return;
   state.stars += stars;
   const day = todayKey();
@@ -1220,6 +1308,10 @@ async function submitTaskByChild(taskId) {
 }
 
 function rateTaskByParent(taskId, rating, options = {}) {
+  if (isSecurityLocked()) {
+    showAlert("检测到本地数据异常，星星资产已冻结。请家长先解锁。", "安全锁定");
+    return;
+  }
   if (!ratingList.includes(rating)) return;
   const { silent = false, partialStars = null, day = todayKey() } = options;
   const dayMap = state.completions[day] || {};
@@ -1273,6 +1365,10 @@ async function undoLastRating() {
 }
 
 function redeemRewardByChild(rewardId) {
+  if (isSecurityLocked()) {
+    showAlert("检测到本地数据异常，星星资产已冻结。请家长先解锁。", "安全锁定");
+    return;
+  }
   const reward = state.rewards.find((item) => item.id === rewardId);
   if (!reward) return;
   const dynamicCost = getDynamicRewardCost(reward);
@@ -1298,6 +1394,7 @@ function redeemRewardByChild(rewardId) {
 }
 
 async function grantBonusByParent(reason, stars) {
+  if (!await ensureSecurityUnlocked("额外加分")) return false;
   if (!reason || Number.isNaN(stars) || stars < 1) return false;
   const remain = getBonusRemainThisWeek();
   if (stars > remain) {
@@ -1318,6 +1415,7 @@ async function grantBonusByParent(reason, stars) {
 }
 
 async function playGachaByChild() {
+  if (!await ensureSecurityUnlocked("抽盲盒")) return;
   if (!state.gachaConfig?.enabled) {
     await showAlert("盲盒功能暂未开启。", "盲盒未开启");
     return;
@@ -1349,12 +1447,13 @@ async function playGachaByChild() {
     actor: "child"
   });
 
-  saveData({ feedbackText: "宝箱已领取" });
+  saveData({ feedbackText: "盲盒结果已记录" });
   renderAll();
   await showAlert(`本次盲盒：${reward.name}${gainStars > 0 ? `（+${gainStars}⭐）` : ""}`, "盲盒结果");
 }
 
 async function claimWeeklyGoalChest() {
+  if (!await ensureSecurityUnlocked("领取宝箱")) return;
   const weekKey = currentWeekKey();
   const reached = isWeeklyGoalReached();
   if (!reached) {
@@ -1384,9 +1483,31 @@ async function claimWeeklyGoalChest() {
     detail: `week:${weekKey}`,
     actor: "child"
   });
-  saveData({ feedbackText: "任务已删除" });
+  saveData({ feedbackText: "宝箱已领取" });
   renderAll();
   await showAlert(`已领取「${chestTitle}」${chestStars > 0 ? `，获得 ${chestStars}⭐` : ""}。`, "领取成功");
+}
+
+async function claimCarryoverGoalChest(chestId) {
+  if (!await ensureSecurityUnlocked("补领宝箱")) return;
+  const index = state.unclaimedGoalChests.findIndex((item) => item.id === chestId);
+  if (index < 0) return;
+  const chest = state.unclaimedGoalChests[index];
+  captureRestorePoint("补领跨周宝箱前");
+  state.unclaimedGoalChests.splice(index, 1);
+  const stars = Math.max(0, Number(chest.stars || 0));
+  if (stars > 0) {
+    awardStars(stars, "system", `补领上周目标宝箱：${chest.title}`);
+  } else {
+    addHistory(`补领上周目标宝箱：${chest.title}`, 0, "system");
+  }
+  addAudit("补领跨周目标宝箱", stars, "system", {
+    actor: "child",
+    action: "claim_carryover_goal_chest",
+    detail: `week:${chest.weekKey}`
+  });
+  saveData({ feedbackText: "补领成功" });
+  renderAll();
 }
 
 function removeTask(taskId) {
@@ -1399,7 +1520,7 @@ function removeTask(taskId) {
   if (task) addHistory(`删除任务「${task.name}」`, 0, "system");
   if (task) addAudit(`删除任务：${task.name}`, 0, "system", { action: "delete_task" });
   if (ui.editingTaskId === taskId) clearTaskEdit();
-  saveData({ feedbackText: "奖励已删除" });
+  saveData({ feedbackText: "任务已删除" });
   renderAll();
 }
 
@@ -1410,7 +1531,7 @@ function removeReward(rewardId) {
   if (reward) addHistory(`删除奖励「${reward.name}」`, 0, "system");
   if (reward) addAudit(`删除奖励：${reward.name}`, 0, "system", { action: "delete_reward" });
   if (ui.editingRewardId === rewardId) clearRewardEdit();
-  saveData({ feedbackText: "任务顺序已更新" });
+  saveData({ feedbackText: "奖励已删除" });
   renderAll();
 }
 
@@ -1424,7 +1545,7 @@ function moveTask(taskId, direction) {
   const [task] = state.tasks.splice(index, 1);
   state.tasks.splice(targetIndex, 0, task);
   addHistory(`已调整任务顺序：${task.name}`, 0, "system");
-  saveData({ feedbackText: "奖励顺序已更新" });
+  saveData({ feedbackText: "任务顺序已更新" });
   renderAll();
 }
 
@@ -1438,7 +1559,7 @@ function moveReward(rewardId, direction) {
   const [reward] = state.rewards.splice(index, 1);
   state.rewards.splice(targetIndex, 0, reward);
   addHistory(`已调整奖励顺序：${reward.name}`, 0, "system");
-  saveData({ feedbackText: "每周目标已保存" });
+  saveData({ feedbackText: "奖励顺序已更新" });
   renderAll();
 }
 
@@ -1476,6 +1597,24 @@ function renderWeeklyGoal() {
     claimGoalChestBtn.classList.toggle("hidden", !reached && !claimed);
     claimGoalChestBtn.disabled = claimed || !reached;
     claimGoalChestBtn.textContent = claimed ? "本周已领取" : "领取本周目标宝箱";
+  }
+
+  if (carryoverChestWrap && carryoverChestList) {
+    const queue = Array.isArray(state.unclaimedGoalChests) ? state.unclaimedGoalChests : [];
+    carryoverChestWrap.classList.toggle("hidden", queue.length === 0);
+    carryoverChestList.innerHTML = "";
+    for (const chest of queue) {
+      const li = document.createElement("li");
+      li.className = "item";
+      li.innerHTML = `
+        <div>
+          <strong>${chest.title}</strong><br />
+          <small>来源周：${chest.weekKey} | 可补领 +${chest.stars}⭐</small>
+        </div>
+        <button data-carryover-claim="${chest.id}">补领</button>
+      `;
+      carryoverChestList.appendChild(li);
+    }
   }
 }
 
@@ -2092,6 +2231,22 @@ function setSyncStatus(text) {
   state.serverSync.lastSyncStatus = text;
 }
 
+async function handleTamperDetectionIfNeeded() {
+  if (!storeMeta?.tamperedAtLoad) return;
+  if (!state.security?.tamperLocked) {
+    state.security.tamperLocked = true;
+    state.security.tamperDetectedAt = Date.now();
+    addHistory("检测到本地数据异常，已冻结星星资产", 0, "system", { actor: "system" });
+    addAudit("本地数据校验失败，触发资产冻结", 0, "system", {
+      actor: "system",
+      action: "tamper_detected_lock",
+      detail: "source:localStorage_checksum"
+    });
+    saveData({ markPending: false });
+  }
+  await showAlert("检测到本地数据可能被篡改，星星资产已冻结。请家长在“家长安全”中确认后解锁。", "安全提醒");
+}
+
 function isLocalStateFreshLikeDefault() {
   const hasProgress =
     Number(state.stars || 0) > 0 ||
@@ -2213,6 +2368,8 @@ function mergeStatesForConflict(serverData, localData) {
   merged.weeklyGoal = local.weeklyGoal;
   merged.weeklyGoalChest = local.weeklyGoalChest;
   merged.weeklyGoalChestClaimedByWeek = { ...(merged.weeklyGoalChestClaimedByWeek || {}), ...(local.weeklyGoalChestClaimedByWeek || {}) };
+  merged.unclaimedGoalChests = mergeByIdList(merged.unclaimedGoalChests, local.unclaimedGoalChests);
+  merged.weeklyGoalRolloverCursor = local.weeklyGoalRolloverCursor || merged.weeklyGoalRolloverCursor;
   merged.bank = local.bank;
   merged.bankConfig = local.bankConfig;
   merged.timeConfig = local.timeConfig;
@@ -2220,6 +2377,7 @@ function mergeStatesForConflict(serverData, localData) {
   merged.gachaConfig = local.gachaConfig;
   merged.makeupConfig = local.makeupConfig;
   merged.bonusConfig = local.bonusConfig;
+  merged.security = local.security;
   merged.theme = local.theme;
 
   return merged;
@@ -2291,6 +2449,8 @@ function renderAll() {
   const starsChanged = lastRenderedStars !== state.stars;
   const weeklyGrantApplied = ensureWeeklyMakeupCardGrant();
   if (weeklyGrantApplied) saveData();
+  const weeklyChestRolled = rolloverUnclaimedWeeklyGoalChest();
+  if (weeklyChestRolled) saveData();
   refreshStreakFromCheckins();
   todayDateText.textContent = `今天是 ${formatTodayLabel()}`;
   document.body.dataset.theme = state.theme || "sunny";
@@ -2348,6 +2508,9 @@ function renderAll() {
     goalChestParentText.textContent = `当前目标宝箱：${chestTitle}（+${chestStars}⭐），每周可领取 1 次。`;
   }
   pinGraceInput.value = String(state.pinGraceMinutes);
+  if (tamperLockNotice) {
+    tamperLockNotice.classList.toggle("hidden", !isSecurityLocked());
+  }
   if (timezoneSelect) {
     timezoneSelect.value = state.timeConfig.fixedOffsetMinutes === null ? "" : String(state.timeConfig.fixedOffsetMinutes);
   }
@@ -2841,6 +3004,22 @@ if (bankEnabledToggle) {
   });
 }
 
+if (tamperUnlockBtn) {
+  tamperUnlockBtn.addEventListener("click", async () => {
+    if (!isSecurityLocked()) return;
+    const ok = await showConfirm("确认已由家长核对数据并解除安全锁定吗？", "解除安全锁定");
+    if (!ok) return;
+    state.security.tamperLocked = false;
+    addHistory("家长已解除安全锁定", 0, "system", { actor: "parent" });
+    addAudit("解除安全锁定", 0, "system", {
+      actor: "parent",
+      action: "tamper_unlock"
+    });
+    saveData({ feedbackText: "已解除安全锁定" });
+    renderAll();
+  });
+}
+
 if (bonusLimitForm) {
   bonusLimitForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -3001,6 +3180,16 @@ makeupCheckinBtn.addEventListener("click", () => {
 if (claimGoalChestBtn) {
   claimGoalChestBtn.addEventListener("click", () => {
     claimWeeklyGoalChest();
+  });
+}
+
+if (carryoverChestList) {
+  carryoverChestList.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("button") : null;
+    if (!(button instanceof HTMLButtonElement) || !carryoverChestList.contains(button)) return;
+    const chestId = button.dataset.carryoverClaim;
+    if (!chestId) return;
+    claimCarryoverGoalChest(chestId);
   });
 }
 
@@ -3373,6 +3562,8 @@ async function refreshFromServerSilently() {
 }
 
 async function initApp() {
+  await handleTamperDetectionIfNeeded();
+
   if (authState.token) {
     const me = await fetchMe();
     if (me.ok) {

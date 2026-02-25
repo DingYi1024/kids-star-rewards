@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260225ag" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260225ah" />
 </head>
 
 <body>
@@ -134,6 +134,12 @@
             <small id="goalMotivateText">再努力一点就能达标！</small>
             <small id="goalChestText">周目标宝箱：未达成</small>
             <button id="claimGoalChestBtn" class="btn-soft" type="button">领取本周目标宝箱</button>
+            <div id="carryoverChestWrap" class="empty-state hidden">
+              <div class="empty-state-emoji" aria-hidden="true">📦</div>
+              <strong>你有上周未领取宝箱</strong>
+              <small>周末太晚没领也没关系，这里可以补领。</small>
+              <ul id="carryoverChestList" class="list"></ul>
+            </div>
           </div>
         </article>
       </div>
@@ -218,6 +224,12 @@
               <input id="pinGraceInput" type="number" min="0" max="120" value="5" placeholder="免输密码(分钟)" />
               <button type="submit" class="btn-soft">保存</button>
             </form>
+            <div id="tamperLockNotice" class="empty-state hidden">
+              <div class="empty-state-emoji" aria-hidden="true">🛡️</div>
+              <strong>已触发安全锁定</strong>
+              <small>检测到本地数据异常，星星资产已冻结。请家长确认后解锁。</small>
+              <button id="tamperUnlockBtn" type="button" class="btn-soft">家长确认解锁</button>
+            </div>
           </div>
         </article>
       </div>
@@ -473,11 +485,11 @@
 
   <div id="actionToast" class="action-toast hidden" role="status" aria-live="polite"></div>
 
-  <script src="assets/js/date-utils.js?v=20260225ag"></script>
-  <script src="assets/js/store.js?v=20260225ag"></script>
-  <script src="assets/js/sync-auth-client.js?v=20260225ag"></script>
-  <script src="assets/js/modals.js?v=20260225ag"></script>
-  <script src="assets/js/app.js?v=20260225ag"></script>
+  <script src="assets/js/date-utils.js?v=20260225ah"></script>
+  <script src="assets/js/store.js?v=20260225ah"></script>
+  <script src="assets/js/sync-auth-client.js?v=20260225ah"></script>
+  <script src="assets/js/modals.js?v=20260225ah"></script>
+  <script src="assets/js/app.js?v=20260225ah"></script>
 </body>
 
 </html>

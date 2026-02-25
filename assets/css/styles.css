@@ -1909,6 +1909,15 @@ body.reduce-motion *::after {
   color: #67758f;
 }
 
+.empty-state .list {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.empty-state .item {
+  background: rgba(255, 255, 255, 0.9);
+}
+
 .empty-state-emoji {
   width: 44px;
   height: 44px;
