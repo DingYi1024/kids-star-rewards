@@ -193,6 +193,7 @@ function normalizeDataShape() {
   if (typeof state.serverSync.lastSyncAt !== "number" || state.serverSync.lastSyncAt < 0) state.serverSync.lastSyncAt = 0;
   if (typeof state.serverSync.lastSyncStatus !== "string") state.serverSync.lastSyncStatus = "未同步";
   if (typeof state.serverSync.version !== "number" || state.serverSync.version < 0) state.serverSync.version = 0;
+  if (typeof state.serverSync.version !== "number" || state.serverSync.version < 0) state.serverSync.version = 0;
   if (!state.timeConfig || typeof state.timeConfig !== "object") state.timeConfig = { fixedOffsetMinutes: null };
   if (!Object.hasOwn(state.timeConfig, "fixedOffsetMinutes")) state.timeConfig.fixedOffsetMinutes = null;
   if (state.timeConfig.fixedOffsetMinutes !== null) {
@@ -294,6 +295,9 @@ function saveData(options = {}) {
   if (markPending && state.serverSync) state.serverSync.pendingChanges = true;
   persist();
   queueAutoSync();
+  if (markPending && authState.token) {
+    flushAutoSync();
+  }
   if (feedbackText) showActionToast(feedbackText);
 }
 
@@ -569,6 +573,7 @@ let autoSyncTimer = null;
 let autoSyncRunning = false;
 let autoSyncPending = false;
 let toastTimer = null;
+let livePullTimer = null;
 
 function showActionToast(message) {
   if (!actionToast || !message) return;
@@ -3180,6 +3185,10 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     flushAutoSync();
+    return;
+  }
+  if (document.visibilityState === "visible") {
+    refreshFromServerSilently();
   }
 });
 
@@ -3226,6 +3235,25 @@ async function bootstrapServerState(options = {}) {
   }
 }
 
+async function refreshFromServerSilently() {
+  if (!authState.token) return;
+  if (state.serverSync?.pendingChanges) return;
+
+  const status = await syncAdapter.getStatus();
+  if (!status.canSync) return;
+
+  const result = await syncAdapter.pull();
+  const incomingVersion = Number(result.version || 0);
+  const currentVersion = Number(state.serverSync?.version || 0);
+  if (result.ok && result.data && incomingVersion > currentVersion) {
+    applyPulledServerData(result.data, {
+      successStatus: "已同步最新数据",
+      historyText: "",
+      version: incomingVersion
+    });
+  }
+}
+
 async function initApp() {
   if (authState.token) {
     const me = await fetchMe();
@@ -3241,7 +3269,12 @@ async function initApp() {
   clearRewardEdit();
   saveData({ markPending: false });
   renderAll();
-  await bootstrapServerState();
+  await bootstrapServerState({ preferServer: true });
+
+  if (livePullTimer) clearInterval(livePullTimer);
+  livePullTimer = setInterval(() => {
+    refreshFromServerSilently();
+  }, 15000);
 
   const status = await syncAdapter.getStatus();
   const shouldWarnServerDown =
