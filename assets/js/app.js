@@ -2818,7 +2818,7 @@ async function submitAuth() {
     saveAuthState();
     closeAuthModal();
     renderAll();
-    await bootstrapServerState();
+    await bootstrapServerState({ preferServer: true });
     await showAlert("注册并登录成功。", "欢迎");
     return;
   }
@@ -2839,7 +2839,7 @@ async function submitAuth() {
   saveAuthState();
   closeAuthModal();
   renderAll();
-  await bootstrapServerState();
+  await bootstrapServerState({ preferServer: true });
   await showAlert("登录成功。", "欢迎回来");
 }
 
@@ -3177,11 +3177,22 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   });
 }
 
-async function bootstrapServerState() {
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    flushAutoSync();
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  flushAutoSync();
+});
+
+async function bootstrapServerState(options = {}) {
+  const { preferServer = false } = options;
   const status = await syncAdapter.getStatus();
   if (!status.canSync) return;
 
-  if (state.serverSync?.pendingChanges) {
+  if (!preferServer && state.serverSync?.pendingChanges) {
     const pushed = await syncAdapter.push();
     setSyncStatus(pushed.ok ? "恢复未同步数据成功" : "恢复未同步数据失败");
     if (pushed.ok) state.serverSync.pendingChanges = false;
@@ -3190,7 +3201,7 @@ async function bootstrapServerState() {
     return;
   }
 
-  if (!isLocalStateFreshLikeDefault()) {
+  if (!preferServer && !isLocalStateFreshLikeDefault()) {
     setSyncStatus("本地优先模式：已跳过启动拉取，避免覆盖本地最新修改");
     saveData({ markPending: false });
     renderAll();
@@ -3208,6 +3219,7 @@ async function bootstrapServerState() {
   }
 
   if (String(result.message || "").includes("暂无") || String(result.message || "").includes("no state")) {
+    if (preferServer && state.serverSync) state.serverSync.pendingChanges = false;
     setSyncStatus("服务器暂无数据（已暂停自动初始化上传）");
     saveData({ markPending: false });
     renderAll();
