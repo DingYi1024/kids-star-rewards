@@ -1591,6 +1591,22 @@ function setSyncStatus(text) {
   state.serverSync.lastSyncStatus = text;
 }
 
+function isLocalStateFreshLikeDefault() {
+  const hasProgress =
+    Number(state.stars || 0) > 0 ||
+    Array.isArray(state.history) && state.history.length > 0 ||
+    Object.keys(state.completions || {}).length > 0 ||
+    Array.isArray(state.redeemLog) && state.redeemLog.length > 0;
+  if (hasProgress) return false;
+
+  const localTasks = (state.tasks || []).map((task) => `${task.name}|${task.stars}|${Boolean(task.needProof)}`).join("||");
+  const defaultTasks = (defaultData.tasks || []).map((task) => `${task.name}|${task.stars}|${Boolean(task.needProof)}`).join("||");
+  const localRewards = (state.rewards || []).map((reward) => `${reward.name}|${reward.cost}|${Number.isFinite(reward.stock) ? reward.stock : ""}|${Number(reward.cooldownDays || 0)}`).join("||");
+  const defaultRewards = (defaultData.rewards || []).map((reward) => `${reward.name}|${reward.cost}|${Number.isFinite(reward.stock) ? reward.stock : ""}|${Number(reward.cooldownDays || 0)}`).join("||");
+
+  return localTasks === defaultTasks && localRewards === defaultRewards;
+}
+
 function applyPulledServerData(serverData, options = {}) {
   const {
     captureLabel,
@@ -2438,6 +2454,13 @@ async function bootstrapServerState() {
     setSyncStatus(pushed.ok ? "恢复未同步数据成功" : "恢复未同步数据失败");
     if (pushed.ok) state.serverSync.pendingChanges = false;
     persist();
+    renderAll();
+    return;
+  }
+
+  if (!isLocalStateFreshLikeDefault()) {
+    setSyncStatus("本地优先模式：已跳过启动拉取，避免覆盖本地最新修改");
+    saveData({ markPending: false });
     renderAll();
     return;
   }
