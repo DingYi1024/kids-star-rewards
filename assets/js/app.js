@@ -64,13 +64,18 @@ const defaultData = {
   },
   bonusUsageByWeek: {},
   bankConfig: {
-    weeklyRatePercent: 1,
-    weeklyInterestCap: 20,
-    allowChildWithdraw: true
+    enabled: true,
+    weeklyRatePercent: 10,
+    weeklyInterestCap: 5,
+    allowChildWithdraw: true,
+    minDeposit: 5,
+    earlyWithdrawPenaltyPercent: 10,
+    earlyWithdrawDays: 7
   },
   bank: {
     balance: 0,
-    lastInterestWeek: ""
+    lastInterestWeek: "",
+    lastDepositDay: ""
   },
   pricingConfig: {
     hotStockThreshold: 1,
@@ -183,11 +188,11 @@ function normalizeDataShape() {
     };
   }
   if (typeof state.serverSync.enabled !== "boolean") state.serverSync.enabled = true;
-  state.serverSync.enabled = true;
   if (typeof state.serverSync.autoPush !== "boolean") state.serverSync.autoPush = true;
   if (typeof state.serverSync.pendingChanges !== "boolean") state.serverSync.pendingChanges = false;
   if (typeof state.serverSync.lastSyncAt !== "number" || state.serverSync.lastSyncAt < 0) state.serverSync.lastSyncAt = 0;
   if (typeof state.serverSync.lastSyncStatus !== "string") state.serverSync.lastSyncStatus = "未同步";
+  if (typeof state.serverSync.version !== "number" || state.serverSync.version < 0) state.serverSync.version = 0;
   if (!state.timeConfig || typeof state.timeConfig !== "object") state.timeConfig = { fixedOffsetMinutes: null };
   if (!Object.hasOwn(state.timeConfig, "fixedOffsetMinutes")) state.timeConfig.fixedOffsetMinutes = null;
   if (state.timeConfig.fixedOffsetMinutes !== null) {
@@ -202,12 +207,17 @@ function normalizeDataShape() {
   if (!state.bankConfig || typeof state.bankConfig !== "object") {
     state.bankConfig = { weeklyRatePercent: 1, weeklyInterestCap: 20, allowChildWithdraw: true };
   }
-  state.bankConfig.weeklyRatePercent = Math.max(0, Number(state.bankConfig.weeklyRatePercent || 1));
-  state.bankConfig.weeklyInterestCap = Math.max(1, Number(state.bankConfig.weeklyInterestCap || 20));
+  state.bankConfig.enabled = state.bankConfig.enabled !== false;
+  state.bankConfig.weeklyRatePercent = Math.max(0, Number(state.bankConfig.weeklyRatePercent ?? 10));
+  state.bankConfig.weeklyInterestCap = Math.max(1, Number(state.bankConfig.weeklyInterestCap ?? 5));
   state.bankConfig.allowChildWithdraw = state.bankConfig.allowChildWithdraw !== false;
-  if (!state.bank || typeof state.bank !== "object") state.bank = { balance: 0, lastInterestWeek: "" };
+  state.bankConfig.minDeposit = Math.max(1, Number(state.bankConfig.minDeposit ?? 5));
+  state.bankConfig.earlyWithdrawPenaltyPercent = Math.max(0, Number(state.bankConfig.earlyWithdrawPenaltyPercent ?? 10));
+  state.bankConfig.earlyWithdrawDays = Math.max(0, Number(state.bankConfig.earlyWithdrawDays ?? 7));
+  if (!state.bank || typeof state.bank !== "object") state.bank = { balance: 0, lastInterestWeek: "", lastDepositDay: "" };
   state.bank.balance = Math.max(0, Number(state.bank.balance || 0));
   if (typeof state.bank.lastInterestWeek !== "string") state.bank.lastInterestWeek = "";
+  if (typeof state.bank.lastDepositDay !== "string") state.bank.lastDepositDay = "";
   if (!state.pricingConfig || typeof state.pricingConfig !== "object") {
     state.pricingConfig = { hotStockThreshold: 1, hotMarkupPercent: 20 };
   }
@@ -279,10 +289,11 @@ function normalizeDataShape() {
 normalizeDataShape();
 
 function saveData(options = {}) {
-  const { markPending = true } = options;
+  const { markPending = true, feedbackText = "" } = options;
   if (markPending && state.serverSync) state.serverSync.pendingChanges = true;
   persist();
   queueAutoSync();
+  if (feedbackText) showActionToast(feedbackText);
 }
 
 function createSnapshotData() {
@@ -338,7 +349,7 @@ async function restoreFromPoint(pointId) {
   state.restorePoints = savedPoints;
   normalizeDataShape();
   addHistory("已恢复到历史时间点", 0, "system");
-  saveData();
+  saveData({ feedbackText: "恢复成功" });
   renderAll();
 }
 
@@ -361,6 +372,7 @@ const bankSummaryText = document.querySelector("#bankSummaryText");
 const bankActionForm = document.querySelector("#bankActionForm");
 const bankActionType = document.querySelector("#bankActionType");
 const bankActionAmount = document.querySelector("#bankActionAmount");
+const bankRulesInline = document.querySelector("#bankRulesInline");
 const openStreakText = document.querySelector("#openStreakText");
 const streakHintText = document.querySelector("#streakHintText");
 const makeupInfoText = document.querySelector("#makeupInfoText");
@@ -426,6 +438,12 @@ const bankRateInput = document.querySelector("#bankRateInput");
 const bankCapInput = document.querySelector("#bankCapInput");
 const bankWithdrawToggle = document.querySelector("#bankWithdrawToggle");
 const bankRuleSummary = document.querySelector("#bankRuleSummary");
+const bankEnabledToggle = document.querySelector("#bankEnabledToggle");
+const childBankCard = document.querySelector("#childBankCard");
+const bankPenaltyForm = document.querySelector("#bankPenaltyForm");
+const bankMinDepositInput = document.querySelector("#bankMinDepositInput");
+const bankPenaltyPercentInput = document.querySelector("#bankPenaltyPercentInput");
+const bankPenaltyDaysInput = document.querySelector("#bankPenaltyDaysInput");
 const bonusLimitForm = document.querySelector("#bonusLimitForm");
 const bonusWeeklyLimitInput = document.querySelector("#bonusWeeklyLimitInput");
 const bonusLimitText = document.querySelector("#bonusLimitText");
@@ -506,6 +524,7 @@ const authHintText = document.querySelector("#authHintText");
 const authSubmitBtn = document.querySelector("#authSubmitBtn");
 const authSwitchBtn = document.querySelector("#authSwitchBtn");
 const authCancelBtn = document.querySelector("#authCancelBtn");
+const actionToast = document.querySelector("#actionToast");
 
 const ui = {
   role: localStorage.getItem(ROLE_KEY) === "parent" ? "parent" : "child",
@@ -548,6 +567,19 @@ let lastRenderedStars = state.stars;
 let autoSyncTimer = null;
 let autoSyncRunning = false;
 let autoSyncPending = false;
+let toastTimer = null;
+
+function showActionToast(message) {
+  if (!actionToast || !message) return;
+  actionToast.textContent = message;
+  actionToast.classList.remove("hidden");
+  actionToast.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    actionToast.classList.remove("show");
+    setTimeout(() => actionToast.classList.add("hidden"), 180);
+  }, 1200);
+}
 
 async function flushAutoSync() {
   if (autoSyncRunning) {
@@ -559,8 +591,13 @@ async function flushAutoSync() {
   autoSyncRunning = true;
   const result = await syncAdapter.push();
   state.serverSync.lastSyncAt = Date.now();
-  state.serverSync.lastSyncStatus = result.ok ? "自动保存成功" : "自动保存失败";
-  if (result.ok) state.serverSync.pendingChanges = false;
+
+  if (result.conflict) {
+    state.serverSync.lastSyncStatus = "版本冲突，请手动拉取";
+  } else {
+    state.serverSync.lastSyncStatus = result.ok ? "自动保存成功" : "自动保存失败";
+    if (result.ok) state.serverSync.pendingChanges = false;
+  }
   persist();
   autoSyncRunning = false;
 
@@ -835,6 +872,11 @@ async function moveStarsByBank(action, amount) {
   }
 
   if (action === "deposit") {
+    const minDeposit = Math.max(1, Number(state.bankConfig.minDeposit || 5));
+    if (stars < minDeposit) {
+      await showAlert(`最低存入 ${minDeposit}⭐，攒够再存哦！`, "存入限制");
+      return;
+    }
     if (state.stars < stars) {
       await showAlert("钱包星星不足，无法存入。", "操作失败");
       return;
@@ -842,9 +884,11 @@ async function moveStarsByBank(action, amount) {
     captureRestorePoint("银行存入前");
     state.stars -= stars;
     state.bank.balance += stars;
+    state.bank.lastDepositDay = todayKey();
     addHistory(`存入银行 ${stars}⭐`, 0, "system", { actor: "child" });
     addAudit("银行存入", 0, "system", { actor: "child", action: "bank_deposit", detail: `stars:${stars}` });
-    saveData();
+    playSound("good");
+    saveData({ feedbackText: "已存入银行" });
     renderAll();
     return;
   }
@@ -858,12 +902,39 @@ async function moveStarsByBank(action, amount) {
       await showAlert("银行星星不足，无法取出。", "操作失败");
       return;
     }
+
+    // Early withdrawal penalty
+    const penaltyDays = Math.max(0, Number(state.bankConfig.earlyWithdrawDays || 7));
+    const penaltyPercent = Math.max(0, Number(state.bankConfig.earlyWithdrawPenaltyPercent || 10));
+    let penalty = 0;
+    let penaltyMsg = "";
+    if (penaltyDays > 0 && penaltyPercent > 0 && state.bank.lastDepositDay) {
+      const elapsed = dayDiff(state.bank.lastDepositDay, todayKey());
+      if (elapsed < penaltyDays) {
+        penalty = Math.max(1, Math.floor(stars * penaltyPercent / 100));
+        const remaining = penaltyDays - elapsed;
+        penaltyMsg = `距离免罚期还差 ${remaining} 天，提前取出将扣除手续费 ${penalty}⭐（${penaltyPercent}%）。`;
+      }
+    }
+
+    if (penalty > 0) {
+      const ok = await showConfirm(`${penaltyMsg}\n\n实际到账 ${stars - penalty}⭐，确认取出吗？`, "提前取出");
+      if (!ok) return;
+    }
+
     captureRestorePoint("银行取出前");
     state.bank.balance -= stars;
-    state.stars += stars;
-    addHistory(`从银行取出 ${stars}⭐`, 0, "system", { actor: "child" });
-    addAudit("银行取出", 0, "system", { actor: "child", action: "bank_withdraw", detail: `stars:${stars}` });
-    saveData();
+    const netStars = stars - penalty;
+    state.stars += netStars;
+    if (penalty > 0) {
+      addHistory(`从银行取出 ${stars}⭐（手续费 ${penalty}⭐，到账 ${netStars}⭐）`, 0, "system", { actor: "child" });
+      addAudit("银行提前取出", 0, "system", { actor: "child", action: "bank_withdraw_early", detail: `gross:${stars},fee:${penalty},net:${netStars}` });
+    } else {
+      addHistory(`从银行取出 ${stars}⭐`, 0, "system", { actor: "child" });
+      addAudit("银行取出", 0, "system", { actor: "child", action: "bank_withdraw", detail: `stars:${stars}` });
+    }
+    playSound("tap");
+    saveData({ feedbackText: "已从银行取出" });
     renderAll();
   }
 }
@@ -983,7 +1054,7 @@ async function tryUseMakeupCard() {
   state.openStreakLastDay = todayKey();
   applyMilestoneAward(makeupDay, Boolean(state.makeupConfig.countForMilestone));
   addHistory(`使用补签卡补签：${makeupDay}`, 0, "system");
-  saveData();
+  saveData({ feedbackText: "任务已提交" });
   renderAll();
 }
 
@@ -1112,14 +1183,13 @@ async function submitTaskByChild(taskId) {
   updateCheckinStreak(day);
   addHistory(`孩子提交任务「${task.name}」，待家长评分`, 0, "task");
   playSound("tap");
-  saveData();
+  saveData({ feedbackText: "评分已保存" });
   renderAll();
 }
 
 function rateTaskByParent(taskId, rating, options = {}) {
   if (!ratingList.includes(rating)) return;
-  const { silent = false, partialStars = null } = options;
-  const day = todayKey();
+  const { silent = false, partialStars = null, day = todayKey() } = options;
   const dayMap = state.completions[day] || {};
   const completion = dayMap[taskId];
   if (!completion || completion.state !== "pending") return;
@@ -1150,7 +1220,7 @@ function rateTaskByParent(taskId, rating, options = {}) {
     addHistory(`家长评分「${task.name}」：${rating}`, 0, "task");
   }
   addHistory(`鼓励语：${feedback}`, 0, "system");
-  saveData();
+  saveData({ feedbackText: "已撤销评分" });
   renderAll();
 }
 
@@ -1166,7 +1236,7 @@ async function undoLastRating() {
   state.stars = last.starsBefore;
   state.earningsByDay[last.day] = last.earningsBefore;
   addHistory("已撤销上一条评分", 0, "system");
-  saveData();
+  saveData({ feedbackText: "兑换成功" });
   renderAll();
 }
 
@@ -1191,7 +1261,7 @@ function redeemRewardByChild(rewardId) {
     actor: "child"
   });
   playSound("redeem");
-  saveData();
+  saveData({ feedbackText: "加分已保存" });
   renderAll();
 }
 
@@ -1210,7 +1280,7 @@ async function grantBonusByParent(reason, stars) {
     action: "grant_bonus",
     detail: `reason:${reason}`
   });
-  saveData();
+  saveData({ feedbackText: "盲盒结果已记录" });
   renderAll();
   return true;
 }
@@ -1247,7 +1317,7 @@ async function playGachaByChild() {
     actor: "child"
   });
 
-  saveData();
+  saveData({ feedbackText: "宝箱已领取" });
   renderAll();
   await showAlert(`本次盲盒：${reward.name}${gainStars > 0 ? `（+${gainStars}⭐）` : ""}`, "盲盒结果");
 }
@@ -1282,7 +1352,7 @@ async function claimWeeklyGoalChest() {
     detail: `week:${weekKey}`,
     actor: "child"
   });
-  saveData();
+  saveData({ feedbackText: "任务已删除" });
   renderAll();
   await showAlert(`已领取「${chestTitle}」${chestStars > 0 ? `，获得 ${chestStars}⭐` : ""}。`, "领取成功");
 }
@@ -1297,7 +1367,7 @@ function removeTask(taskId) {
   if (task) addHistory(`删除任务「${task.name}」`, 0, "system");
   if (task) addAudit(`删除任务：${task.name}`, 0, "system", { action: "delete_task" });
   if (ui.editingTaskId === taskId) clearTaskEdit();
-  saveData();
+  saveData({ feedbackText: "奖励已删除" });
   renderAll();
 }
 
@@ -1308,7 +1378,7 @@ function removeReward(rewardId) {
   if (reward) addHistory(`删除奖励「${reward.name}」`, 0, "system");
   if (reward) addAudit(`删除奖励：${reward.name}`, 0, "system", { action: "delete_reward" });
   if (ui.editingRewardId === rewardId) clearRewardEdit();
-  saveData();
+  saveData({ feedbackText: "任务顺序已更新" });
   renderAll();
 }
 
@@ -1322,7 +1392,7 @@ function moveTask(taskId, direction) {
   const [task] = state.tasks.splice(index, 1);
   state.tasks.splice(targetIndex, 0, task);
   addHistory(`已调整任务顺序：${task.name}`, 0, "system");
-  saveData();
+  saveData({ feedbackText: "奖励顺序已更新" });
   renderAll();
 }
 
@@ -1336,7 +1406,7 @@ function moveReward(rewardId, direction) {
   const [reward] = state.rewards.splice(index, 1);
   state.rewards.splice(targetIndex, 0, reward);
   addHistory(`已调整奖励顺序：${reward.name}`, 0, "system");
-  saveData();
+  saveData({ feedbackText: "每周目标已保存" });
   renderAll();
 }
 
@@ -1648,43 +1718,49 @@ function renderParentRewards() {
 
 function renderParentPending() {
   parentPendingList.innerHTML = "";
-  const dayMap = state.completions[todayKey()] || {};
   const keyword = (pendingSearchInput?.value || "").trim().toLowerCase();
-  const pendingTasks = state.tasks.filter((task) => {
-    if (dayMap[task.id]?.state !== "pending") return false;
-    if (!keyword) return true;
-    return task.name.toLowerCase().includes(keyword);
-  });
 
-  if (!pendingTasks.length) {
+  // Collect pending tasks across ALL days, not just today
+  const pendingEntries = [];
+  for (const day of Object.keys(state.completions)) {
+    const dayMap = state.completions[day];
+    if (!dayMap || typeof dayMap !== "object") continue;
+    for (const task of state.tasks) {
+      if (dayMap[task.id]?.state !== "pending") continue;
+      if (keyword && !task.name.toLowerCase().includes(keyword)) continue;
+      pendingEntries.push({ task, day, completion: dayMap[task.id] });
+    }
+  }
+
+  if (!pendingEntries.length) {
     const li = document.createElement("li");
     li.className = "item";
-    li.innerHTML = "<small>今天没有待评分任务。</small>";
+    li.innerHTML = "<small>没有待评分任务。</small>";
     parentPendingList.appendChild(li);
     return;
   }
 
-  for (const task of pendingTasks) {
-    const completion = dayMap[task.id];
+  for (const { task, day, completion } of pendingEntries) {
     const proofInfo = completion?.proofName ? `凭证：${completion.proofName}` : "无凭证";
+    const dayLabel = day === todayKey() ? "今天" : day;
     const li = document.createElement("li");
     li.className = "item";
     li.innerHTML = `
       <div>
         <strong>${task.name}</strong><br />
-        <small>满分 ${task.stars}⭐ | ${proofInfo}</small>
+        <small>满分 ${task.stars}⭐ | ${proofInfo} | ${dayLabel}</small>
       </div>
       <div class="task-actions">
         <div class="rate-buttons">
-          <button class="btn-rate btn-active" data-parent-rate="${task.id}" data-rating="${RATING_ACTIVE}">${RATING_ACTIVE}</button>
-          <button class="btn-rate btn-remind" data-parent-rate="${task.id}" data-rating="${RATING_REMIND}">${RATING_REMIND}</button>
-          <button class="btn-rate btn-passive" data-parent-rate="${task.id}" data-rating="${RATING_PASSIVE}">${RATING_PASSIVE}</button>
+          <button class="btn-rate btn-active" data-parent-rate="${task.id}" data-rating="${RATING_ACTIVE}" data-rate-day="${day}">${RATING_ACTIVE}</button>
+          <button class="btn-rate btn-remind" data-parent-rate="${task.id}" data-rating="${RATING_REMIND}" data-rate-day="${day}">${RATING_REMIND}</button>
+          <button class="btn-rate btn-passive" data-parent-rate="${task.id}" data-rating="${RATING_PASSIVE}" data-rate-day="${day}">${RATING_PASSIVE}</button>
         </div>
         <div class="partial-rate-row">
           <input type="number" min="0" max="99" value="${task.stars}" data-partial-input="${task.id}" />
-          <button class="btn-soft" data-parent-partial="${task.id}">部分给⭐</button>
+          <button class="btn-soft" data-parent-partial="${task.id}" data-rate-day="${day}">部分给⭐</button>
         </div>
-        <button class="btn-passive" data-parent-reject="${task.id}">驳回</button>
+        <button class="btn-passive" data-parent-reject="${task.id}" data-rate-day="${day}">驳回</button>
       </div>
     `;
     parentPendingList.appendChild(li);
@@ -2011,7 +2087,8 @@ function applyPulledServerData(serverData, options = {}) {
   const {
     captureLabel,
     successStatus = "拉取成功",
-    historyText = "已从服务器拉取数据"
+    historyText = "已从服务器拉取数据",
+    version
   } = options;
 
   if (captureLabel) captureRestorePoint(captureLabel);
@@ -2022,6 +2099,7 @@ function applyPulledServerData(serverData, options = {}) {
   Object.assign(state, { ...structuredClone(defaultData), ...serverData });
   state.serverSync = keepServerSync;
   state.serverSync.pendingChanges = false;
+  if (typeof version === "number") state.serverSync.version = version;
   setSyncStatus(successStatus);
   state.restorePoints = keepRestorePoints;
   normalizeDataShape();
@@ -2101,8 +2179,41 @@ function renderAll() {
   document.body.dataset.theme = state.theme || "sunny";
   childStarCount.textContent = String(state.stars);
   parentStarCount.textContent = String(state.stars);
+  const bankEnabled = state.bankConfig.enabled !== false;
+  if (childBankCard) childBankCard.classList.toggle("hidden", !bankEnabled);
   if (bankSummaryText) {
-    bankSummaryText.textContent = `银行：${Math.floor(state.bank.balance)}⭐ | 下周预计利息 +${estimateWeeklyBankInterest()}⭐`;
+    bankSummaryText.classList.toggle("hidden", !bankEnabled);
+    if (bankEnabled) {
+      const bal = Math.floor(state.bank.balance);
+      const interest = estimateWeeklyBankInterest();
+      let hint = "";
+      if (bal > 0 && state.bank.lastDepositDay) {
+        const elapsed = dayDiff(state.bank.lastDepositDay, todayKey());
+        const penaltyDays = Math.max(0, Number(state.bankConfig.earlyWithdrawDays || 7));
+        if (penaltyDays > 0 && elapsed < penaltyDays) {
+          hint = ` | 免罚取出还需 ${penaltyDays - elapsed} 天`;
+        } else {
+          hint = " | 可免罚取出";
+        }
+      }
+      bankSummaryText.textContent = `🏦 银行：${bal}⭐ | 预计利息 +${interest}⭐/周${hint}`;
+    }
+  }
+  if (bankRulesInline) {
+    bankRulesInline.classList.toggle("hidden", !bankEnabled);
+    if (bankEnabled) {
+      const c = state.bankConfig;
+      const parts = [`最低存入 ${c.minDeposit}⭐`];
+      parts.push(`周利率 ${c.weeklyRatePercent}%（上限 ${c.weeklyInterestCap}⭐）`);
+      if (c.earlyWithdrawDays > 0 && c.earlyWithdrawPenaltyPercent > 0) {
+        parts.push(`${c.earlyWithdrawDays}天内取出罚${c.earlyWithdrawPenaltyPercent}%`);
+        parts.push(`满${c.earlyWithdrawDays}天免罚`);
+      } else {
+        parts.push("取出无手续费");
+      }
+      if (!c.allowChildWithdraw) parts.push("需家长代操作取出");
+      bankRulesInline.textContent = parts.join(" · ");
+    }
   }
   soundToggle.checked = Boolean(state.soundEnabled);
   reduceMotionToggle.checked = Boolean(state.reduceMotion);
@@ -2146,9 +2257,17 @@ function renderAll() {
   if (bankRateInput) bankRateInput.value = String(Number(state.bankConfig.weeklyRatePercent || 1));
   if (bankCapInput) bankCapInput.value = String(Number(state.bankConfig.weeklyInterestCap || 20));
   if (bankWithdrawToggle) bankWithdrawToggle.checked = Boolean(state.bankConfig.allowChildWithdraw);
+  if (bankEnabledToggle) bankEnabledToggle.checked = Boolean(state.bankConfig.enabled);
   if (bankRuleSummary) {
-    bankRuleSummary.textContent = `银行规则：每周利率 ${state.bankConfig.weeklyRatePercent}%（单周上限 ${state.bankConfig.weeklyInterestCap}⭐）`;
+    const r = state.bankConfig;
+    bankRuleSummary.textContent = `银行规则：周利率 ${r.weeklyRatePercent}%（上限 ${r.weeklyInterestCap}⭐）| 最低存入 ${r.minDeposit}⭐ | ${r.earlyWithdrawDays}天内取出罚${r.earlyWithdrawPenaltyPercent}% | 孩子${r.allowChildWithdraw ? "可" : "不可"}取出`;
   }
+  if (bankRateInput) bankRateInput.value = String(state.bankConfig.weeklyRatePercent);
+  if (bankCapInput) bankCapInput.value = String(state.bankConfig.weeklyInterestCap);
+  if (bankMinDepositInput) bankMinDepositInput.value = String(state.bankConfig.minDeposit);
+  if (bankPenaltyPercentInput) bankPenaltyPercentInput.value = String(state.bankConfig.earlyWithdrawPenaltyPercent);
+  if (bankPenaltyDaysInput) bankPenaltyDaysInput.value = String(state.bankConfig.earlyWithdrawDays);
+  if (bankWithdrawToggle) bankWithdrawToggle.checked = Boolean(state.bankConfig.allowChildWithdraw);
   if (hotStockThresholdInput) hotStockThresholdInput.value = String(Math.max(1, Number(state.pricingConfig.hotStockThreshold || 1)));
   if (hotMarkupPercentInput) hotMarkupPercentInput.value = String(Math.max(0, Number(state.pricingConfig.hotMarkupPercent || 0)));
   if (dynamicPricingSummary) {
@@ -2249,7 +2368,7 @@ pinVerifyBtn.addEventListener("click", async () => {
   state.parentUnlockUntil = Date.now() + Number(state.pinGraceMinutes || 0) * 60 * 1000;
   ui.role = "parent";
   localStorage.setItem(ROLE_KEY, "parent");
-  saveData();
+  saveData({ feedbackText: "验证成功" });
   renderRole();
 });
 
@@ -2274,7 +2393,7 @@ goalForm.addEventListener("submit", (event) => {
   captureRestorePoint("修改每周目标前");
   state.weeklyGoal = goal;
   addHistory(`设置每周目标：${goal}⭐`, 0, "system");
-  saveData();
+  saveData({ feedbackText: "每周目标已保存" });
   renderAll();
 });
 
@@ -2288,7 +2407,7 @@ if (goalChestForm) {
     state.weeklyGoalChest.title = title;
     state.weeklyGoalChest.stars = stars;
     addHistory(`已更新目标宝箱：${title}（+${stars}⭐）`, 0, "system");
-    saveData();
+    saveData({ feedbackText: "目标宝箱已保存" });
     renderAll();
   });
 }
@@ -2304,7 +2423,7 @@ pinForm.addEventListener("submit", async (event) => {
   state.pinEnabled = true;
   state.pin = pin;
   addHistory("已更新家长PIN", 0, "system");
-  saveData();
+  saveData({ feedbackText: "PIN已保存" });
   pinForm.reset();
 });
 
@@ -2314,7 +2433,7 @@ pinOffBtn.addEventListener("click", () => {
   state.pin = "";
   state.parentUnlockUntil = 0;
   addHistory("已关闭家长PIN", 0, "system");
-  saveData();
+  saveData({ feedbackText: "PIN已关闭" });
 });
 
 pinGraceForm.addEventListener("submit", (event) => {
@@ -2324,21 +2443,21 @@ pinGraceForm.addEventListener("submit", (event) => {
   captureRestorePoint("修改PIN免输时长前");
   state.pinGraceMinutes = minutes;
   addHistory(`已更新PIN免输时长：${minutes}分钟`, 0, "system");
-  saveData();
+  saveData({ feedbackText: "免输时长已保存" });
 });
 
 soundToggle.addEventListener("change", () => {
   captureRestorePoint("切换音效前");
   state.soundEnabled = soundToggle.checked;
   addHistory(state.soundEnabled ? "已开启音效反馈" : "已关闭音效反馈", 0, "system");
-  saveData();
+  saveData({ feedbackText: state.soundEnabled ? "已开启音效" : "已关闭音效" });
 });
 
 reduceMotionToggle.addEventListener("change", () => {
   captureRestorePoint("切换动画模式前");
   state.reduceMotion = reduceMotionToggle.checked;
   addHistory(state.reduceMotion ? "已开启简化动画" : "已关闭简化动画", 0, "system");
-  saveData();
+  saveData({ feedbackText: state.reduceMotion ? "已开启简化动画" : "已关闭简化动画" });
   renderAll();
 });
 
@@ -2350,7 +2469,7 @@ if (timezoneForm) {
     state.timeConfig.fixedOffsetMinutes = raw === "" ? null : Number(raw);
     applyTimezoneConfig();
     addHistory(`已更新家庭时区：${timezoneOffsetText(state.timeConfig.fixedOffsetMinutes)}`, 0, "system");
-    saveData();
+    saveData({ feedbackText: "家庭时区已保存" });
     renderAll();
   });
 }
@@ -2360,7 +2479,7 @@ if (streakFeatureToggle) {
     captureRestorePoint("切换连续打卡功能前");
     state.streakEnabled = streakFeatureToggle.checked;
     addHistory(state.streakEnabled ? "已开启连续打卡功能" : "已关闭连续打卡功能", 0, "system");
-    saveData();
+    saveData({ feedbackText: state.streakEnabled ? "已开启连续打卡" : "已关闭连续打卡" });
     renderAll();
   });
 }
@@ -2373,7 +2492,7 @@ makeupConfigForm.addEventListener("submit", (event) => {
   state.makeupConfig.weeklyLimit = weeklyLimit;
   state.makeupConfig.windowDays = 1;
   addHistory("已更新补签规则", 0, "system");
-  saveData();
+  saveData({ feedbackText: "补签规则已保存" });
   renderAll();
 });
 
@@ -2385,7 +2504,7 @@ if (makeupCardWeeklyForm) {
     captureRestorePoint("修改每周补签卡发放前");
     state.makeupConfig.weeklyCardGrant = weeklyGrant;
     addHistory(`已更新每周补签卡发放：${weeklyGrant} 张`, 0, "system");
-    saveData();
+    saveData({ feedbackText: "每周发卡已保存" });
     renderAll();
   });
 }
@@ -2397,7 +2516,7 @@ if (makeupCardGrantForm) {
     if (!Number.isFinite(grantCount) || grantCount < 1) return;
     captureRestorePoint("家长奖励补签卡前");
     grantMakeupCards(grantCount, "家长奖励补签卡");
-    saveData();
+    saveData({ feedbackText: "补签卡已发放" });
     renderAll();
   });
 }
@@ -2406,7 +2525,7 @@ makeupCountMilestoneToggle.addEventListener("change", () => {
   captureRestorePoint("切换补签里程碑前");
   state.makeupConfig.countForMilestone = makeupCountMilestoneToggle.checked;
   addHistory(state.makeupConfig.countForMilestone ? "补签可触发里程碑奖励" : "补签不触发里程碑奖励", 0, "system");
-  saveData();
+  saveData({ feedbackText: state.makeupConfig.countForMilestone ? "补签可触发里程碑" : "补签不触发里程碑" });
 });
 
 taskForm.addEventListener("submit", (event) => {
@@ -2430,8 +2549,9 @@ taskForm.addEventListener("submit", (event) => {
     addAudit(`新增任务：${name}`, 0, "system", { action: "create_task" });
   }
 
+  const wasEditingTask = Boolean(ui.editingTaskId);
   clearTaskEdit();
-  saveData();
+  saveData({ feedbackText: wasEditingTask ? "任务已修改" : "任务已新增" });
   renderAll();
 });
 
@@ -2463,8 +2583,9 @@ rewardForm.addEventListener("submit", (event) => {
     addAudit(`新增奖励：${name}`, 0, "system", { action: "create_reward" });
   }
 
+  const wasEditingReward = Boolean(ui.editingRewardId);
   clearRewardEdit();
-  saveData();
+  saveData({ feedbackText: wasEditingReward ? "奖励已修改" : "奖励已新增" });
   renderAll();
 });
 
@@ -2483,7 +2604,7 @@ if (dynamicPricingForm) {
       action: "update_dynamic_pricing",
       detail: `threshold:${state.pricingConfig.hotStockThreshold},markup:${state.pricingConfig.hotMarkupPercent}`
     });
-    saveData();
+    saveData({ feedbackText: "热抢规则已保存" });
     renderAll();
   });
 }
@@ -2501,7 +2622,7 @@ if (gachaConfigForm) {
       action: "update_gacha_config",
       detail: `enabled:${state.gachaConfig.enabled},cost:${state.gachaConfig.cost}`
     });
-    saveData();
+    saveData({ feedbackText: "盲盒消耗已保存" });
     renderAll();
   });
 }
@@ -2521,7 +2642,7 @@ if (saveGachaPoolBtn) {
       action: "update_gacha_pool",
       detail: `size:${parsed.length}`
     });
-    saveData();
+    saveData({ feedbackText: "盲盒奖池已保存" });
     renderAll();
   });
 }
@@ -2553,17 +2674,53 @@ if (bankConfigForm) {
     const cap = Number(bankCapInput?.value || 0);
     if (!Number.isFinite(rate) || rate < 0) return;
     if (!Number.isFinite(cap) || cap < 1) return;
-    captureRestorePoint("修改银行规则前");
-    state.bankConfig.weeklyRatePercent = Math.round(rate * 10) / 10;
+    captureRestorePoint("修改银行利息规则前");
+    state.bankConfig.weeklyRatePercent = Math.round(rate);
     state.bankConfig.weeklyInterestCap = Math.round(cap);
-    state.bankConfig.allowChildWithdraw = Boolean(bankWithdrawToggle?.checked);
-    addHistory(`已更新银行规则：周利率${state.bankConfig.weeklyRatePercent}%`, 0, "system");
-    addAudit("更新银行规则", 0, "system", {
-      action: "bank_config_update",
-      detail: `rate:${state.bankConfig.weeklyRatePercent},cap:${state.bankConfig.weeklyInterestCap},allowWithdraw:${state.bankConfig.allowChildWithdraw}`
-    });
-    saveData();
+    addHistory(`已更新银行利息规则：周利率${state.bankConfig.weeklyRatePercent}%，上限${state.bankConfig.weeklyInterestCap}⭐`, 0, "system");
+    saveData({ feedbackText: "银行利息规则已保存" });
     renderAll();
+    showAlert(`利息规则已保存：周利率 ${state.bankConfig.weeklyRatePercent}%，上限 ${state.bankConfig.weeklyInterestCap}⭐`, "✅ 保存成功");
+  });
+}
+
+if (bankPenaltyForm) {
+  bankPenaltyForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const minDep = Number(bankMinDepositInput?.value || 5);
+    const penPct = Number(bankPenaltyPercentInput?.value || 10);
+    const penDays = Number(bankPenaltyDaysInput?.value || 7);
+    if (!Number.isFinite(minDep) || minDep < 1) return;
+    if (!Number.isFinite(penPct) || penPct < 0) return;
+    if (!Number.isFinite(penDays) || penDays < 0) return;
+    captureRestorePoint("修改银行取出规则前");
+    state.bankConfig.minDeposit = Math.round(minDep);
+    state.bankConfig.earlyWithdrawPenaltyPercent = Math.round(penPct);
+    state.bankConfig.earlyWithdrawDays = Math.round(penDays);
+    addHistory(`已更新银行取出规则：最低存入${state.bankConfig.minDeposit}⭐，${state.bankConfig.earlyWithdrawDays}天内取出罚${state.bankConfig.earlyWithdrawPenaltyPercent}%`, 0, "system");
+    saveData({ feedbackText: "银行取出规则已保存" });
+    renderAll();
+    showAlert(`取出规则已保存：最低 ${state.bankConfig.minDeposit}⭐，${state.bankConfig.earlyWithdrawDays}天内罚${state.bankConfig.earlyWithdrawPenaltyPercent}%`, "✅ 保存成功");
+  });
+}
+
+if (bankWithdrawToggle) {
+  bankWithdrawToggle.addEventListener("change", () => {
+    state.bankConfig.allowChildWithdraw = Boolean(bankWithdrawToggle.checked);
+    addHistory(`银行取出权限：${state.bankConfig.allowChildWithdraw ? "允许孩子取出" : "禁止孩子取出"}`, 0, "system");
+    saveData({ feedbackText: state.bankConfig.allowChildWithdraw ? "已允许孩子取出" : "已禁止孩子取出" });
+    renderAll();
+    showAlert(state.bankConfig.allowChildWithdraw ? "已允许孩子自由取出" : "已禁止孩子自行取出", "✅ 设置已保存");
+  });
+}
+
+if (bankEnabledToggle) {
+  bankEnabledToggle.addEventListener("change", () => {
+    state.bankConfig.enabled = Boolean(bankEnabledToggle.checked);
+    addHistory(`银行功能：${state.bankConfig.enabled ? "已开启" : "已关闭"}`, 0, "system");
+    saveData({ feedbackText: state.bankConfig.enabled ? "银行功能已开启" : "银行功能已关闭" });
+    renderAll();
+    showAlert(state.bankConfig.enabled ? "银行功能已开启，孩子界面将显示银行" : "银行功能已关闭，孩子界面将隐藏银行", "✅ 设置已保存");
   });
 }
 
@@ -2575,7 +2732,7 @@ if (bonusLimitForm) {
     captureRestorePoint("修改额外奖励上限前");
     state.bonusConfig.weeklyLimit = Math.round(weeklyLimit);
     addHistory(`已更新每周额外奖励上限：${state.bonusConfig.weeklyLimit}⭐`, 0, "system");
-    saveData();
+    saveData({ feedbackText: "每周额外奖励上限已保存" });
     renderAll();
   });
 }
@@ -2599,7 +2756,7 @@ if (pendingSearchInput) {
 
 themeSelect.addEventListener("change", () => {
   state.theme = themeSelect.value;
-  saveData();
+  saveData({ feedbackText: "主题已切换" });
   renderAll();
 });
 
@@ -2795,7 +2952,8 @@ parentPendingList.addEventListener("click", async (event) => {
       await showAlert("请输入有效的部分星值。", "部分给星");
       return;
     }
-    rateTaskByParent(partialTaskId, RATING_REMIND, { partialStars: stars });
+    const day = button.dataset.rateDay || todayKey();
+    rateTaskByParent(partialTaskId, RATING_REMIND, { partialStars: stars, day });
     return;
   }
 
@@ -2803,13 +2961,13 @@ parentPendingList.addEventListener("click", async (event) => {
   if (rejectTaskId) {
     const reason = await showPrompt("请输入驳回原因", "请补充拍照凭证或任务细节", "驳回任务");
     if (reason === null) return;
-    const day = todayKey();
+    const day = button.dataset.rateDay || todayKey();
     const completion = state.completions[day]?.[rejectTaskId];
     if (!completion || completion.state !== "pending") return;
     completion.state = "rejected";
     completion.reason = reason.trim() || "请补充后再提交";
     addHistory(`驳回任务，原因：${completion.reason}`, 0, "task");
-    saveData();
+    saveData({ feedbackText: "驳回已保存" });
     renderAll();
     return;
   }
@@ -2817,24 +2975,32 @@ parentPendingList.addEventListener("click", async (event) => {
   const taskId = button.dataset.parentRate;
   const rating = button.dataset.rating;
   if (!taskId || !rating) return;
-  rateTaskByParent(taskId, rating);
+  const day = button.dataset.rateDay || todayKey();
+  rateTaskByParent(taskId, rating, { day });
 });
 
 async function approveAllPendingAs(rating) {
-  const dayMap = state.completions[todayKey()] || {};
-  const pendingTaskIds = state.tasks
-    .filter((task) => dayMap[task.id]?.state === "pending")
-    .map((task) => task.id);
+  // Collect pending across all days
+  const pendingItems = [];
+  for (const day of Object.keys(state.completions)) {
+    const dayMap = state.completions[day];
+    if (!dayMap || typeof dayMap !== "object") continue;
+    for (const task of state.tasks) {
+      if (dayMap[task.id]?.state === "pending") {
+        pendingItems.push({ taskId: task.id, day });
+      }
+    }
+  }
 
-  if (!pendingTaskIds.length) {
-    await showAlert("今天没有待评分任务。", "无需操作");
+  if (!pendingItems.length) {
+    await showAlert("没有待评分任务。", "无需操作");
     return;
   }
-  const ok = await showConfirm(`确认将 ${pendingTaskIds.length} 个任务一键评为“${rating}”吗？`, "批量评分");
+  const ok = await showConfirm(`确认将 ${pendingItems.length} 个任务一键评为“${rating}”吗？`, "批量评分");
   if (!ok) return;
 
-  for (const taskId of pendingTaskIds) {
-    rateTaskByParent(taskId, rating, { silent: true });
+  for (const { taskId, day } of pendingItems) {
+    rateTaskByParent(taskId, rating, { silent: true, day });
   }
   playSound("good");
   renderAll();
@@ -2925,7 +3091,7 @@ resetTodayBtn.addEventListener("click", async () => {
   state.completions[day] = {};
   delete state.checkinDays[day];
   addHistory("已重置今天任务状态", 0, "system");
-  saveData();
+  saveData({ feedbackText: "今日任务已重置" });
   renderAll();
 });
 
@@ -2939,7 +3105,7 @@ exportBtn.addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
   state.lastBackupExportAt = Date.now();
-  saveData();
+  saveData({ feedbackText: "已完成导出" });
   renderBackupReminder();
 });
 
@@ -3000,7 +3166,7 @@ importInput.addEventListener("change", () => {
       Object.assign(state, merged);
       normalizeDataShape();
       addHistory("已导入数据", 0, "system");
-      saveData();
+      saveData({ feedbackText: "导入成功" });
       renderAll();
     } catch {
       await showAlert("导入失败，文件格式不正确。", "导入失败");
@@ -3041,7 +3207,8 @@ async function bootstrapServerState() {
   if (result.ok && result.data) {
     applyPulledServerData(result.data, {
       successStatus: "启动拉取成功",
-      historyText: ""
+      historyText: "",
+      version: result.version
     });
     return;
   }
@@ -3082,5 +3249,50 @@ async function initApp() {
     await showAlert("服务器当前不可用，数据暂存本地，恢复后会继续自动保存。", "同步提醒");
   }
 }
+
+// ── Parent Tab switching ──
+const parentTabButtons = document.querySelectorAll(".parent-tab");
+const parentTabContents = {
+  today: document.querySelector("#parentTabToday"),
+  manage: document.querySelector("#parentTabManage"),
+  settings: document.querySelector("#parentTabSettings")
+};
+
+parentTabButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab;
+    parentTabButtons.forEach(b => b.classList.toggle("active", b === btn));
+    Object.entries(parentTabContents).forEach(([key, el]) => {
+      if (el) el.classList.toggle("hidden", key !== tab);
+    });
+  });
+});
+
+// ── Empty state helpers ──
+const pendingEmpty = document.querySelector("#pendingEmpty");
+const historyEmpty = document.querySelector("#historyEmpty");
+const childTaskEmpty = document.querySelector("#childTaskEmpty");
+
+function updateEmptyStates() {
+  if (pendingEmpty) {
+    const hasPending = document.querySelector("#parentPendingList")?.children.length > 0;
+    pendingEmpty.classList.toggle("hidden", hasPending);
+  }
+  if (historyEmpty) {
+    const hasHistory = document.querySelector("#parentHistoryList")?.children.length > 0;
+    historyEmpty.classList.toggle("hidden", hasHistory);
+  }
+  if (childTaskEmpty) {
+    const hasTasks = document.querySelector("#childTaskList")?.children.length > 0;
+    childTaskEmpty.classList.toggle("hidden", hasTasks);
+  }
+}
+
+// Hook into renderAll
+const _origRenderAll = renderAll;
+renderAll = function (...args) {
+  _origRenderAll.apply(this, args);
+  updateEmptyStates();
+};
 
 initApp();

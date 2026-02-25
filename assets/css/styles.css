@@ -1629,6 +1629,30 @@ button:disabled {
   gap: 8px;
 }
 
+.action-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1400;
+  max-width: min(88vw, 380px);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d7e8cd;
+  background: linear-gradient(120deg, #f7fff2, #eefde7);
+  color: #336024;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(35, 72, 22, 0.18);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.action-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 body.reduce-motion *,
 body.reduce-motion *::before,
 body.reduce-motion *::after {
