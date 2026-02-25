@@ -1547,6 +1547,7 @@ async function showAuthError(message, title) {
   const currentMode = ui.authMode;
   const currentUsername = String(authUsernameInput?.value || "");
   closeAuthModal();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   await showAlert(message, title);
   openAuthModal(currentMode);
   if (authUsernameInput) authUsernameInput.value = currentUsername;

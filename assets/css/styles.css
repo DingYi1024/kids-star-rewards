@@ -1424,6 +1424,11 @@ button:disabled {
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
+  z-index: 1200;
+}
+
+#authModal {
+  z-index: 1100;
 }
 
 .modal.hidden {
