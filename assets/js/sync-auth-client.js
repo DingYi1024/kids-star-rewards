@@ -28,11 +28,12 @@
     }
 
     async function apiFetch(url, requestOptions = {}) {
+      const cacheMode = requestOptions.cache || "no-store";
       const headers = {
         ...(requestOptions.headers || {})
       };
       if (authState.token) headers.Authorization = `Bearer ${authState.token}`;
-      return fetch(url, { ...requestOptions, headers });
+      return fetch(url, { ...requestOptions, cache: cacheMode, headers });
     }
 
     async function registerAccount(username, password) {

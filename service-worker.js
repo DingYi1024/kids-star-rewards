@@ -1,13 +1,13 @@
-const CACHE_NAME = "kids-star-rewards-v12";
+const CACHE_NAME = "kids-star-rewards-v14";
 const ASSETS = [
   "./",
   "./index.html",
-  "./assets/css/styles.css?v=20260225h",
-  "./assets/js/date-utils.js?v=20260225h",
-  "./assets/js/store.js?v=20260225h",
-  "./assets/js/sync-auth-client.js?v=20260225h",
-  "./assets/js/modals.js?v=20260225h",
-  "./assets/js/app.js?v=20260225h",
+  "./assets/css/styles.css?v=20260225j",
+  "./assets/js/date-utils.js?v=20260225j",
+  "./assets/js/store.js?v=20260225j",
+  "./assets/js/sync-auth-client.js?v=20260225j",
+  "./assets/js/modals.js?v=20260225j",
+  "./assets/js/app.js?v=20260225j",
   "./manifest.json",
   "./assets/icons/icon.svg"
 ];

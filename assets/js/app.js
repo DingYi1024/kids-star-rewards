@@ -1548,7 +1548,7 @@ function applyPulledServerData(serverData, options = {}) {
   state.restorePoints = keepRestorePoints;
   normalizeDataShape();
   if (historyText) addHistory(historyText, 0, "system");
-  saveData();
+  saveData({ markPending: false });
   renderAll();
 }
 
@@ -2319,7 +2319,7 @@ async function bootstrapServerState() {
     if (pushed.ok) state.serverSync.pendingChanges = false;
     persist();
     renderAll();
-    if (!pushed.ok) return;
+    return;
   }
 
   const result = await syncAdapter.pull();
