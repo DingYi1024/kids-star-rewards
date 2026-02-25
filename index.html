@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#6a8bd6" />
     <link rel="manifest" href="manifest.json" />
     <title>星星积累小助手</title>
-    <link rel="stylesheet" href="assets/css/styles.css?v=20260225o" />
+    <link rel="stylesheet" href="assets/css/styles.css?v=20260225p" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -139,11 +139,11 @@
 
           <article class="card">
             <h2>奖励兑换</h2>
-            <div id="gachaBoxWrap" class="gacha-box-wrap">
-              <small id="gachaHintText">盲盒：未开启</small>
-              <button id="gachaDrawBtn" class="btn-soft" type="button">抽取盲盒</button>
-            </div>
             <ul id="childRewardList" class="list"></ul>
+            <div id="gachaBoxWrap" class="gacha-box-wrap">
+              <small id="gachaHintText">盲盒：每次消耗 5⭐，随机获得奖励</small>
+              <button id="gachaDrawBtn" class="btn-soft" type="button">抽盲盒</button>
+            </div>
           </article>
         </div>
 
@@ -276,14 +276,20 @@
               <input id="hotMarkupPercentInput" type="number" min="0" max="100" value="20" placeholder="热抢加价%" />
               <button type="submit">保存热抢规则</button>
             </form>
+            <small id="dynamicPricingSummary" class="setting-note">热抢说明：库存剩余较少时自动加价。</small>
+            <hr class="section-divider" />
             <form id="gachaConfigForm" class="inline-form goal-form">
               <input id="gachaCostInput" type="number" min="1" max="50" value="5" placeholder="盲盒消耗⭐" />
               <button type="submit">保存盲盒消耗</button>
             </form>
             <label class="inline-check"><input id="gachaEnabledToggle" type="checkbox" checked /> 开启任务盲盒</label>
-            <textarea id="gachaPoolInput" rows="4" placeholder="盲盒奖池，每行：名称|星星|权重，例如：棒棒糖|0|3"></textarea>
-            <button id="saveGachaPoolBtn" class="btn-soft" type="button">保存盲盒奖池</button>
-            <small id="gachaPoolSummary" class="setting-note">当前盲盒奖池：0 项</small>
+            <small id="gachaRuleSummary" class="setting-note">盲盒说明：每次消耗固定星星，从奖池按权重随机抽取。</small>
+            <details class="rule-details">
+              <summary>编辑盲盒奖池（高级）</summary>
+              <textarea id="gachaPoolInput" rows="4" placeholder="盲盒奖池，每行：名称|星星|权重，例如：棒棒糖|0|3"></textarea>
+              <button id="saveGachaPoolBtn" class="btn-soft" type="button">保存盲盒奖池</button>
+              <small id="gachaPoolSummary" class="setting-note">当前盲盒奖池：0 项</small>
+            </details>
             <button type="button" id="rewardCancelEdit" class="btn-ghost hidden">取消编辑</button>
             <ul id="parentRewardList" class="list"></ul>
           </article>
@@ -391,10 +397,10 @@
       </div>
     </div>
 
-    <script src="assets/js/date-utils.js?v=20260225o"></script>
-    <script src="assets/js/store.js?v=20260225o"></script>
-    <script src="assets/js/sync-auth-client.js?v=20260225o"></script>
-    <script src="assets/js/modals.js?v=20260225o"></script>
-    <script src="assets/js/app.js?v=20260225o"></script>
+    <script src="assets/js/date-utils.js?v=20260225p"></script>
+    <script src="assets/js/store.js?v=20260225p"></script>
+    <script src="assets/js/sync-auth-client.js?v=20260225p"></script>
+    <script src="assets/js/modals.js?v=20260225p"></script>
+    <script src="assets/js/app.js?v=20260225p"></script>
   </body>
 </html>

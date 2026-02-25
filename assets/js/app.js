@@ -383,9 +383,11 @@ const rewardCooldown = document.querySelector("#rewardCooldown");
 const dynamicPricingForm = document.querySelector("#dynamicPricingForm");
 const hotStockThresholdInput = document.querySelector("#hotStockThresholdInput");
 const hotMarkupPercentInput = document.querySelector("#hotMarkupPercentInput");
+const dynamicPricingSummary = document.querySelector("#dynamicPricingSummary");
 const gachaConfigForm = document.querySelector("#gachaConfigForm");
 const gachaCostInput = document.querySelector("#gachaCostInput");
 const gachaEnabledToggle = document.querySelector("#gachaEnabledToggle");
+const gachaRuleSummary = document.querySelector("#gachaRuleSummary");
 const gachaPoolInput = document.querySelector("#gachaPoolInput");
 const saveGachaPoolBtn = document.querySelector("#saveGachaPoolBtn");
 const gachaPoolSummary = document.querySelector("#gachaPoolSummary");
@@ -2012,8 +2014,14 @@ function renderAll() {
   }
   if (hotStockThresholdInput) hotStockThresholdInput.value = String(Math.max(1, Number(state.pricingConfig.hotStockThreshold || 1)));
   if (hotMarkupPercentInput) hotMarkupPercentInput.value = String(Math.max(0, Number(state.pricingConfig.hotMarkupPercent || 0)));
+  if (dynamicPricingSummary) {
+    dynamicPricingSummary.textContent = `热抢规则：当某奖励本周剩余次数 <= ${state.pricingConfig.hotStockThreshold} 时，价格上浮 ${state.pricingConfig.hotMarkupPercent}%`;
+  }
   if (gachaCostInput) gachaCostInput.value = String(Math.max(1, Number(state.gachaConfig.cost || 5)));
   if (gachaEnabledToggle) gachaEnabledToggle.checked = Boolean(state.gachaConfig.enabled);
+  if (gachaRuleSummary) {
+    gachaRuleSummary.textContent = `盲盒规则：每次消耗 ${state.gachaConfig.cost}⭐，按奖池权重随机抽取；可在高级设置编辑奖池。`;
+  }
   if (gachaPoolInput) gachaPoolInput.value = gachaPoolToText();
   if (gachaPoolSummary) {
     const poolCount = Array.isArray(state.gachaConfig.pool) ? state.gachaConfig.pool.length : 0;
@@ -2021,7 +2029,7 @@ function renderAll() {
   }
   if (gachaBoxWrap && gachaHintText && gachaDrawBtn) {
     gachaBoxWrap.classList.toggle("hidden", !state.gachaConfig.enabled);
-    gachaHintText.textContent = `盲盒：每次消耗 ${state.gachaConfig.cost}⭐，随机奖励`;
+    gachaHintText.textContent = `盲盒：每次 ${state.gachaConfig.cost}⭐，随机奖励`;
     gachaDrawBtn.disabled = state.stars < Number(state.gachaConfig.cost || 0);
   }
   renderAuthStatus();

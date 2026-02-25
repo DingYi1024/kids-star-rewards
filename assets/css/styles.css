@@ -667,7 +667,7 @@ body::after {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 2px 0 10px;
+  margin: 10px 0 2px;
   padding: 8px 10px;
   border: 1px solid #dde6f8;
   border-radius: 12px;
@@ -1380,6 +1380,27 @@ button:disabled {
   resize: vertical;
   background: rgba(255, 255, 255, 0.88);
   font: inherit;
+}
+
+.section-divider {
+  border: 0;
+  border-top: 1px dashed #dbe4f5;
+  margin: 8px 0 10px;
+}
+
+.rule-details {
+  border: 1px dashed #d7e2f6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 8px 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.rule-details > summary {
+  cursor: pointer;
+  color: #415779;
+  font-weight: 700;
 }
 
 .task-actions {
