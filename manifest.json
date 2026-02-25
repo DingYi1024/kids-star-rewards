@@ -1,0 +1,18 @@
+{
+  "name": "星星积累小助手",
+  "short_name": "星星积累",
+  "description": "孩子提交任务，家长评分，持续积累星星奖励。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f8ff",
+  "theme_color": "#6a8bd6",
+  "icons": [
+    {
+      "src": "assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

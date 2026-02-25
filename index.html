@@ -3,8 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6a8bd6" />
+    <link rel="manifest" href="manifest.json" />
     <title>星星积累小助手</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="assets/css/styles.css?v=20260225g" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -22,6 +24,11 @@
             <button class="role-btn" data-role="child">孩子界面</button>
             <button class="role-btn" data-role="parent">家长界面</button>
           </div>
+          <div id="authChip" class="auth-chip">
+            <small id="authUserText">未登录</small>
+            <button id="authOpenBtn" class="btn-soft auth-open-btn" type="button">账号</button>
+            <button id="authLogoutBtn" class="btn-ghost auth-logout-btn hidden" type="button">退出</button>
+          </div>
           <select id="themeSelect" class="theme-select">
             <option value="sunny">晴空主题</option>
             <option value="ocean">海洋主题</option>
@@ -30,6 +37,45 @@
           </select>
         </div>
       </header>
+
+      <section id="welcomePanel" class="panel">
+        <article class="card welcome-card">
+          <div class="welcome-hero">
+            <div class="welcome-copy">
+              <small class="welcome-kicker">STAR QUEST FOR FAMILY</small>
+              <h2>把每天的小任务<br />变成一场成长冒险</h2>
+              <p>不是催促，不是说教，而是让孩子看到自己每天在变得更好。登录后即可开启亲子协作模式。</p>
+              <div class="welcome-badges">
+                <span>任务挑战</span>
+                <span>亲子反馈</span>
+                <span>星星奖励</span>
+              </div>
+              <div class="welcome-actions">
+                <button id="welcomeAuthBtn" class="btn-active welcome-cta" type="button">开始登录 / 注册</button>
+                <span class="welcome-note">登录后即可开始今日任务与家长评分</span>
+              </div>
+            </div>
+            <div class="welcome-preview">
+              <div class="preview-top">
+                <div class="planet"></div>
+                <div class="preview-stat">
+                  <small>今日旅程进度</small>
+                  <strong>72%</strong>
+                </div>
+              </div>
+              <div class="preview-list">
+                <div><b>阅读20分钟</b><span>孩子提交</span></div>
+                <div><b>家长评分</b><span>+2⭐ 入账</span></div>
+                <div><b>兑换奖励</b><span>-8⭐ 已兑换</span></div>
+              </div>
+              <div class="preview-footer">
+                <span>累计连胜：12 天</span>
+                <span>本周净增长：+18⭐</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
 
       <section id="childPanel" class="panel">
         <div id="childTopGrid" class="child-top-grid">
@@ -117,14 +163,15 @@
 
           <article class="card">
             <h2>家长安全</h2>
+            <small class="setting-note">说明：账号用于跨设备登录；PIN仅用于本设备防止孩子误进家长后台。</small>
             <div class="stack-block">
               <form id="pinForm" class="inline-form pin-form">
-                <input id="pinInput" type="password" maxlength="8" placeholder="设置家长PIN(4-8位)" />
-                <button type="submit">保存PIN</button>
+                <input id="pinInput" type="password" maxlength="8" placeholder="设置本设备家长PIN（4-8位）" />
+                <button type="submit">保存设备PIN</button>
                 <button type="button" id="pinOffBtn" class="btn-ghost">关闭PIN</button>
               </form>
               <form id="pinGraceForm" class="inline-form goal-form">
-                <input id="pinGraceInput" type="number" min="0" max="120" value="5" placeholder="PIN免输分钟" />
+                <input id="pinGraceInput" type="number" min="0" max="120" value="5" placeholder="PIN免输分钟（同设备）" />
                 <button type="submit">保存免输时长</button>
               </form>
             </div>
@@ -140,8 +187,7 @@
             <div class="settings-col">
               <label class="inline-check"><input id="soundToggle" type="checkbox" /> 开启音效反馈</label>
               <label class="inline-check"><input id="reduceMotionToggle" type="checkbox" /> 简化动画（低性能模式）</label>
-              <small id="syncStatusText">同步模式：本地（未启用云同步）</small>
-              <button id="syncCheckBtn" type="button" class="btn-soft">检查同步状态</button>
+              <small id="syncStatusText">同步模式：服务器SQLite</small>
             </div>
             <div id="makeupSettingsCol" class="settings-col">
               <form id="makeupConfigForm" class="inline-form goal-form">
@@ -240,6 +286,7 @@
             <button id="exportCsvBtn" type="button" class="btn-soft">导出CSV</button>
             <label class="file-btn">导入数据<input id="importInput" type="file" accept="application/json" /></label>
           </div>
+          <small id="backupReminderBadge" class="backup-reminder hidden"></small>
           <div class="action-row">
             <select id="restorePointSelect" class="filter-select"></select>
             <button id="restorePointBtn" type="button" class="btn-ghost">恢复到该时间点</button>
@@ -262,7 +309,7 @@
     <div id="pinModal" class="modal hidden">
       <div class="modal-card pin-modal-card">
         <h3 class="pin-title">🔐 家长验证</h3>
-        <p class="pin-desc">请输入家长PIN后进入管理界面</p>
+        <p class="pin-desc">请输入本设备家长PIN后进入管理界面</p>
         <input id="pinVerifyInput" type="password" maxlength="8" placeholder="输入PIN" />
         <div class="modal-actions">
           <button id="pinVerifyBtn" class="btn-active">进入家长界面</button>
@@ -283,6 +330,29 @@
       </div>
     </div>
 
-    <script src="app.js"></script>
+    <div id="authModal" class="modal hidden">
+      <div class="modal-card auth-modal-card">
+        <div class="auth-mode-switch">
+          <button id="authModeLoginBtn" class="btn-ghost" type="button">登录</button>
+          <button id="authModeRegisterBtn" class="btn-ghost" type="button">注册</button>
+        </div>
+        <h3 id="authModalTitleText">登录账号</h3>
+        <p id="authModalDescText">同一账号可在不同设备同步同一份成长数据。</p>
+        <input id="authUsernameInput" type="text" maxlength="24" placeholder="用户名（3-24位）" />
+        <input id="authPasswordInput" type="password" maxlength="64" placeholder="密码（至少6位）" />
+        <small id="authHintText" class="auth-hint">没有账号？点击下方切换到注册。</small>
+        <div class="modal-actions">
+          <button id="authSubmitBtn" class="btn-active" type="button">登录</button>
+          <button id="authSwitchBtn" class="btn-soft" type="button">去注册</button>
+          <button id="authCancelBtn" class="btn-passive" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="assets/js/date-utils.js?v=20260225g"></script>
+    <script src="assets/js/store.js?v=20260225g"></script>
+    <script src="assets/js/sync-auth-client.js?v=20260225g"></script>
+    <script src="assets/js/modals.js?v=20260225g"></script>
+    <script src="assets/js/app.js?v=20260225g"></script>
   </body>
 </html>

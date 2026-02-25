@@ -1,6 +1,8 @@
 const STORAGE_KEY = "kids_star_reward_v2";
 const LEGACY_STORAGE_KEY = "kids_star_reward_v1";
 const ROLE_KEY = "kids_star_role";
+const AUTH_TOKEN_KEY = "kids_star_auth_token";
+const AUTH_USER_KEY = "kids_star_auth_user";
 
 const RATING_ACTIVE = "主动";
 const RATING_REMIND = "提醒";
@@ -15,6 +17,7 @@ const feedbackByRating = {
 
 const defaultData = {
   stars: 0,
+  lastBackupExportAt: 0,
   streakEnabled: true,
   weeklyGoal: 20,
   openStreakCount: 0,
@@ -41,6 +44,12 @@ const defaultData = {
   makeupDays: {},
   makeupCardBalance: 0,
   makeupCardGrantByWeek: {},
+  serverSync: {
+    enabled: true,
+    autoPush: true,
+    lastSyncAt: 0,
+    lastSyncStatus: "未同步"
+  },
   theme: "sunny",
   restorePoints: [],
   tasks: [
@@ -56,41 +65,45 @@ const defaultData = {
   history: []
 };
 
-function loadData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
-  const source = raw || legacyRaw;
-  if (!source) return structuredClone(defaultData);
-  try {
-    return JSON.parse(source);
-  } catch {
-    return structuredClone(defaultData);
-  }
+const store = window.KSRStore?.createStore?.({
+  storageKey: STORAGE_KEY,
+  legacyStorageKey: LEGACY_STORAGE_KEY,
+  defaultData
+});
+
+if (!store) {
+  throw new Error("KSRStore not loaded");
 }
 
-const state = loadData();
+const { state, persist } = store;
 
-const syncAdapter = {
-  mode: "local-only",
-  async getStatus() {
-    return {
-      mode: this.mode,
-      canSync: false,
-      message: "当前仅本地存储，云同步未启用"
-    };
-  },
-  async push() {
-    return { ok: false, message: "云同步未启用" };
-  },
-  async pull() {
-    return { ok: false, message: "云同步未启用" };
-  }
-};
+const syncClient = window.KSRSyncAuth?.createClient?.({
+  authTokenKey: AUTH_TOKEN_KEY,
+  authUserKey: AUTH_USER_KEY,
+  getServerSync: () => state.serverSync,
+  createSnapshotData: () => createSnapshotData()
+});
+
+if (!syncClient) {
+  throw new Error("KSRSyncAuth not loaded");
+}
+
+const {
+  authState,
+  saveAuthState,
+  clearAuthState,
+  registerAccount,
+  loginAccount,
+  fetchMe,
+  logoutAccount,
+  syncAdapter
+} = syncClient;
 
 function normalizeDataShape() {
   if (!state.completions || typeof state.completions !== "object") state.completions = {};
   if (!state.earningsByDay || typeof state.earningsByDay !== "object") state.earningsByDay = {};
   if (!Array.isArray(state.history)) state.history = [];
+  if (typeof state.lastBackupExportAt !== "number" || state.lastBackupExportAt < 0) state.lastBackupExportAt = 0;
   if (typeof state.streakEnabled !== "boolean") state.streakEnabled = true;
   if (typeof state.weeklyGoal !== "number" || state.weeklyGoal < 5) state.weeklyGoal = 20;
   if (typeof state.openStreakCount !== "number" || state.openStreakCount < 0) state.openStreakCount = 0;
@@ -113,6 +126,19 @@ function normalizeDataShape() {
   if (!state.makeupDays || typeof state.makeupDays !== "object") state.makeupDays = {};
   if (typeof state.makeupCardBalance !== "number" || state.makeupCardBalance < 0) state.makeupCardBalance = 0;
   if (!state.makeupCardGrantByWeek || typeof state.makeupCardGrantByWeek !== "object") state.makeupCardGrantByWeek = {};
+  if (!state.serverSync || typeof state.serverSync !== "object") {
+    state.serverSync = {
+      enabled: true,
+      autoPush: true,
+      lastSyncAt: 0,
+      lastSyncStatus: "未同步"
+    };
+  }
+  if (typeof state.serverSync.enabled !== "boolean") state.serverSync.enabled = true;
+  state.serverSync.enabled = true;
+  if (typeof state.serverSync.autoPush !== "boolean") state.serverSync.autoPush = true;
+  if (typeof state.serverSync.lastSyncAt !== "number" || state.serverSync.lastSyncAt < 0) state.serverSync.lastSyncAt = 0;
+  if (typeof state.serverSync.lastSyncStatus !== "string") state.serverSync.lastSyncStatus = "未同步";
   if (!Array.isArray(state.restorePoints)) state.restorePoints = [];
   if (typeof state.theme !== "string") state.theme = "sunny";
   state.makeupConfig.weeklyLimit = Math.max(0, Number(state.makeupConfig.weeklyLimit ?? 1));
@@ -151,7 +177,8 @@ function normalizeDataShape() {
 normalizeDataShape();
 
 function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persist();
+  queueAutoSync();
 }
 
 function createSnapshotData() {
@@ -213,9 +240,15 @@ async function restoreFromPoint(pointId) {
 
 const roleSwitch = document.querySelector("#roleSwitch");
 const themeSelect = document.querySelector("#themeSelect");
+const welcomePanel = document.querySelector("#welcomePanel");
+const welcomeAuthBtn = document.querySelector("#welcomeAuthBtn");
 const childPanel = document.querySelector("#childPanel");
 const parentPanel = document.querySelector("#parentPanel");
 const todayDateText = document.querySelector("#todayDateText");
+const authChip = document.querySelector("#authChip");
+const authUserText = document.querySelector("#authUserText");
+const authOpenBtn = document.querySelector("#authOpenBtn");
+const authLogoutBtn = document.querySelector("#authLogoutBtn");
 const childTopGrid = document.querySelector("#childTopGrid");
 const childStreakCard = document.querySelector("#childStreakCard");
 
@@ -276,7 +309,6 @@ const soundToggle = document.querySelector("#soundToggle");
 const reduceMotionToggle = document.querySelector("#reduceMotionToggle");
 const streakFeatureToggle = document.querySelector("#streakFeatureToggle");
 const syncStatusText = document.querySelector("#syncStatusText");
-const syncCheckBtn = document.querySelector("#syncCheckBtn");
 const makeupConfigForm = document.querySelector("#makeupConfigForm");
 const makeupWeeklyLimitInput = document.querySelector("#makeupWeeklyLimitInput");
 const makeupCardWeeklyForm = document.querySelector("#makeupCardWeeklyForm");
@@ -302,6 +334,7 @@ const historySearchInput = document.querySelector("#historySearchInput");
 const exportBtn = document.querySelector("#exportBtn");
 const exportCsvBtn = document.querySelector("#exportCsvBtn");
 const importInput = document.querySelector("#importInput");
+const backupReminderBadge = document.querySelector("#backupReminderBadge");
 const restorePointSelect = document.querySelector("#restorePointSelect");
 const restorePointBtn = document.querySelector("#restorePointBtn");
 
@@ -322,8 +355,21 @@ const uiModalInput = document.querySelector("#uiModalInput");
 const uiModalConfirmBtn = document.querySelector("#uiModalConfirmBtn");
 const uiModalCancelBtn = document.querySelector("#uiModalCancelBtn");
 
+const authModal = document.querySelector("#authModal");
+const authUsernameInput = document.querySelector("#authUsernameInput");
+const authPasswordInput = document.querySelector("#authPasswordInput");
+const authModeLoginBtn = document.querySelector("#authModeLoginBtn");
+const authModeRegisterBtn = document.querySelector("#authModeRegisterBtn");
+const authModalTitleText = document.querySelector("#authModalTitleText");
+const authModalDescText = document.querySelector("#authModalDescText");
+const authHintText = document.querySelector("#authHintText");
+const authSubmitBtn = document.querySelector("#authSubmitBtn");
+const authSwitchBtn = document.querySelector("#authSwitchBtn");
+const authCancelBtn = document.querySelector("#authCancelBtn");
+
 const ui = {
   role: localStorage.getItem(ROLE_KEY) === "parent" ? "parent" : "child",
+  authMode: "login",
   editingTaskId: null,
   editingRewardId: null,
   pendingRedeemId: null,
@@ -333,58 +379,81 @@ const ui = {
   streakHeatmapExpanded: false
 };
 
+const modalService = window.KSRModals?.createModalService?.({
+  uiState: ui,
+  pinModal,
+  pinVerifyInput,
+  uiModal,
+  uiModalTitle,
+  uiModalMessage,
+  uiModalInput,
+  uiModalConfirmBtn,
+  uiModalCancelBtn
+});
+
+if (!modalService) {
+  throw new Error("KSRModals not loaded");
+}
+
+const {
+  openPinModal,
+  closePinModal,
+  showAlert,
+  showConfirm,
+  showPrompt,
+  bindUiModalEvents
+} = modalService;
+
 let lastRenderedStars = state.stars;
+let autoSyncTimer = null;
+let autoSyncRunning = false;
+let autoSyncPending = false;
+
+async function flushAutoSync() {
+  if (autoSyncRunning) {
+    autoSyncPending = true;
+    return;
+  }
+  if (!state.serverSync?.autoPush || !authState.token) return;
+
+  autoSyncRunning = true;
+  const result = await syncAdapter.push();
+  state.serverSync.lastSyncAt = Date.now();
+  state.serverSync.lastSyncStatus = result.ok ? "自动保存成功" : "自动保存失败";
+  persist();
+  autoSyncRunning = false;
+
+  if (autoSyncPending) {
+    autoSyncPending = false;
+    flushAutoSync();
+  }
+}
+
+function queueAutoSync() {
+  if (!state.serverSync?.autoPush || !authState.token) return;
+  if (autoSyncTimer) clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(() => {
+    autoSyncTimer = null;
+    flushAutoSync();
+  }, 900);
+}
 
 if (state.pinEnabled && ui.role === "parent") {
   ui.role = "child";
 }
 
-function todayKey() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const {
+  todayKey,
+  formatTodayLabel,
+  weekStartKey,
+  shiftDay,
+  daysBetween,
+  buildMonthKey,
+  buildDayKey
+} = window.KSRDateUtils || {};
 
-function formatTodayLabel() {
-  const now = new Date();
-  const weekNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day} ${weekNames[now.getDay()]}`;
-}
-
-function weekStartKey(dateKey = todayKey()) {
-  const date = new Date(`${dateKey}T00:00:00`);
-  const day = date.getDay() || 7;
-  date.setDate(date.getDate() - day + 1);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function shiftDay(dateKey, deltaDays) {
-  const date = new Date(`${dateKey}T00:00:00`);
-  date.setDate(date.getDate() + deltaDays);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function pad2(value) {
-  return String(value).padStart(2, "0");
-}
-
-function buildMonthKey(year, monthIndex) {
-  return `${year}-${pad2(monthIndex + 1)}`;
-}
-
-function buildDayKey(year, monthIndex, day) {
-  return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
+if (!todayKey || !formatTodayLabel || !weekStartKey || !shiftDay || !daysBetween || !buildMonthKey || !buildDayKey) {
+  throw new Error("KSRDateUtils not loaded");
 }
 
 function weeklyEarned() {
@@ -614,6 +683,17 @@ function awardStars(stars, type, text) {
 }
 
 function renderRole() {
+  const isLoggedIn = Boolean(authState.token);
+  if (welcomePanel) welcomePanel.classList.toggle("hidden", isLoggedIn);
+  roleSwitch.classList.toggle("hidden", !isLoggedIn);
+  themeSelect.classList.toggle("hidden", !isLoggedIn);
+
+  if (!isLoggedIn) {
+    childPanel.classList.add("hidden");
+    parentPanel.classList.add("hidden");
+    return;
+  }
+
   childPanel.classList.toggle("hidden", ui.role !== "child");
   parentPanel.classList.toggle("hidden", ui.role !== "parent");
 
@@ -1376,6 +1456,93 @@ function renderStats() {
   `;
 }
 
+function renderBackupReminder() {
+  if (!backupReminderBadge) return;
+  const days = daysBetween(Number(state.lastBackupExportAt || 0));
+  const hasData = state.history.length > 0 || state.tasks.length > 0 || state.rewards.length > 0;
+  const shouldShow = hasData && days >= 7;
+  backupReminderBadge.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) return;
+
+  if (!state.lastBackupExportAt) {
+    backupReminderBadge.textContent = "建议先导出一次 JSON 备份，避免浏览器数据意外丢失。";
+    return;
+  }
+
+  backupReminderBadge.textContent = `距离上次 JSON 备份已 ${days} 天，建议今天导出一次。`;
+}
+
+function renderSyncStatus() {
+  if (!syncStatusText) return;
+  const sync = state.serverSync;
+  const lastSyncText = sync.lastSyncAt ? new Date(sync.lastSyncAt).toLocaleString() : "首次使用";
+  syncStatusText.textContent = `同步模式：服务器SQLite（自动保存，最近：${lastSyncText}）`;
+}
+
+function setSyncStatus(text) {
+  state.serverSync.lastSyncAt = Date.now();
+  state.serverSync.lastSyncStatus = text;
+}
+
+function applyPulledServerData(serverData, options = {}) {
+  const {
+    captureLabel,
+    successStatus = "拉取成功",
+    historyText = "已从服务器拉取数据"
+  } = options;
+
+  if (captureLabel) captureRestorePoint(captureLabel);
+
+  const keepServerSync = { ...state.serverSync };
+  const keepRestorePoints = [...state.restorePoints];
+  for (const key of Object.keys(state)) delete state[key];
+  Object.assign(state, { ...structuredClone(defaultData), ...serverData });
+  state.serverSync = keepServerSync;
+  setSyncStatus(successStatus);
+  state.restorePoints = keepRestorePoints;
+  normalizeDataShape();
+  if (historyText) addHistory(historyText, 0, "system");
+  saveData();
+  renderAll();
+}
+
+function renderAuthStatus() {
+  if (authChip) authChip.classList.toggle("is-authenticated", Boolean(authState.token));
+  if (authUserText) authUserText.textContent = authState.username ? `账号：${authState.username}` : "未登录";
+  if (authOpenBtn) authOpenBtn.classList.toggle("hidden", Boolean(authState.token));
+  if (authLogoutBtn) authLogoutBtn.classList.toggle("hidden", !authState.token);
+}
+
+function setAuthMode(mode) {
+  ui.authMode = mode === "register" ? "register" : "login";
+  const isRegister = ui.authMode === "register";
+
+  if (authModeLoginBtn) authModeLoginBtn.classList.toggle("is-active", !isRegister);
+  if (authModeRegisterBtn) authModeRegisterBtn.classList.toggle("is-active", isRegister);
+  if (authModalTitleText) authModalTitleText.textContent = isRegister ? "注册账号" : "登录账号";
+  if (authModalDescText) authModalDescText.textContent = isRegister
+    ? "注册后将自动登录，并开始同步你的家庭数据。"
+    : "使用已有账号登录，继续你的任务与奖励记录。";
+  if (authHintText) authHintText.textContent = isRegister
+    ? "已有账号？可直接切回登录。"
+    : "没有账号？先注册再自动登录。";
+  if (authSubmitBtn) authSubmitBtn.textContent = isRegister ? "注册并登录" : "登录";
+  if (authSwitchBtn) authSwitchBtn.textContent = isRegister ? "去登录" : "去注册";
+}
+
+function openAuthModal() {
+  if (!authModal) return;
+  setAuthMode("login");
+  authModal.classList.remove("hidden");
+  if (authUsernameInput) authUsernameInput.focus();
+}
+
+function closeAuthModal() {
+  if (!authModal) return;
+  authModal.classList.add("hidden");
+  if (authPasswordInput) authPasswordInput.value = "";
+}
+
 function renderAll() {
   const starsChanged = lastRenderedStars !== state.stars;
   const weeklyGrantApplied = ensureWeeklyMakeupCardGrant();
@@ -1405,9 +1572,8 @@ function renderAll() {
     makeupRuleSummary.textContent = `当前：每周最多补签 ${limit} 次，每周自动发卡 ${weeklyGrant} 张，库存 ${balance} 张，本周剩余 ${remain} 次（仅支持补昨天）`;
   }
   themeSelect.value = state.theme || "sunny";
-  if (syncStatusText) {
-    syncStatusText.textContent = `同步模式：${syncAdapter.mode}（云同步未启用）`;
-  }
+  renderAuthStatus();
+  renderSyncStatus();
   renderRole();
   renderStreak();
   renderWeeklyGoal();
@@ -1418,6 +1584,7 @@ function renderAll() {
   renderParentRewards();
   renderParentPending();
   renderStats();
+  renderBackupReminder();
   if (childHistoryList && childHistoryFilter) {
     renderHistory(childHistoryList, childHistoryFilter.value);
   }
@@ -1434,87 +1601,12 @@ function renderAll() {
   }
 }
 
-function openPinModal() {
-  pinVerifyInput.value = "";
-  ui.pinFailCount = 0;
-  pinModal.classList.remove("hidden");
-  pinVerifyInput.focus();
-}
-
-function closePinModal() {
-  pinModal.classList.add("hidden");
-}
-
-function closeUiModal(result) {
-  uiModal.classList.add("hidden");
-  uiModalInput.classList.add("hidden");
-  const resolver = ui.uiModalResolver;
-  ui.uiModalResolver = null;
-  if (resolver) resolver(result);
-}
-
-function openUiModal(options) {
-  const {
-    title = "提示",
-    message = "",
-    confirmText = "确认",
-    cancelText = "取消",
-    showCancel = true,
-    input = false,
-    inputValue = "",
-    inputPlaceholder = ""
-  } = options;
-
-  uiModalTitle.textContent = title;
-  uiModalMessage.textContent = message;
-  uiModalConfirmBtn.textContent = confirmText;
-  uiModalCancelBtn.textContent = cancelText;
-  uiModalCancelBtn.classList.toggle("hidden", !showCancel);
-
-  if (input) {
-    uiModalInput.classList.remove("hidden");
-    uiModalInput.value = inputValue;
-    uiModalInput.placeholder = inputPlaceholder;
-  } else {
-    uiModalInput.classList.add("hidden");
-    uiModalInput.value = "";
-    uiModalInput.placeholder = "";
+roleSwitch.addEventListener("click", (event) => {
+  if (!authState.token) {
+    openAuthModal();
+    return;
   }
 
-  uiModal.classList.remove("hidden");
-  if (input) uiModalInput.focus();
-  else uiModalConfirmBtn.focus();
-
-  return new Promise((resolve) => {
-    ui.uiModalResolver = resolve;
-  });
-}
-
-async function showAlert(message, title = "提示") {
-  await openUiModal({ title, message, confirmText: "我知道了", showCancel: false });
-}
-
-async function showConfirm(message, title = "确认") {
-  const result = await openUiModal({ title, message, confirmText: "确认", cancelText: "取消", showCancel: true });
-  return result.confirmed;
-}
-
-async function showPrompt(message, defaultValue = "", title = "请输入") {
-  const result = await openUiModal({
-    title,
-    message,
-    confirmText: "确认",
-    cancelText: "取消",
-    showCancel: true,
-    input: true,
-    inputValue: defaultValue,
-    inputPlaceholder: "请输入"
-  });
-  if (!result.confirmed) return null;
-  return result.value;
-}
-
-roleSwitch.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLButtonElement)) return;
   const role = target.dataset.role;
@@ -1559,32 +1651,7 @@ pinModal.addEventListener("click", (event) => {
   if (event.target === pinModal) closePinModal();
 });
 
-uiModalConfirmBtn.addEventListener("click", () => {
-  closeUiModal({ confirmed: true, value: uiModalInput.value });
-});
-
-uiModalCancelBtn.addEventListener("click", () => {
-  closeUiModal({ confirmed: false, value: "" });
-});
-
-uiModal.addEventListener("click", (event) => {
-  if (event.target === uiModal) {
-    closeUiModal({ confirmed: false, value: "" });
-  }
-});
-
-uiModalInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    uiModalConfirmBtn.click();
-  }
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !uiModal.classList.contains("hidden")) {
-    closeUiModal({ confirmed: false, value: "" });
-  }
-});
+bindUiModalEvents();
 
 goalForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1787,10 +1854,116 @@ themeSelect.addEventListener("change", () => {
   renderAll();
 });
 
-syncCheckBtn.addEventListener("click", async () => {
-  const status = await syncAdapter.getStatus();
-  await showAlert(`${status.message}\n模式：${status.mode}`, "同步状态");
-});
+if (authOpenBtn) {
+  authOpenBtn.addEventListener("click", () => {
+    openAuthModal();
+  });
+}
+
+if (welcomeAuthBtn) {
+  welcomeAuthBtn.addEventListener("click", () => {
+    openAuthModal();
+  });
+}
+
+if (authModeLoginBtn) {
+  authModeLoginBtn.addEventListener("click", () => {
+    setAuthMode("login");
+  });
+}
+
+if (authModeRegisterBtn) {
+  authModeRegisterBtn.addEventListener("click", () => {
+    setAuthMode("register");
+  });
+}
+
+if (authSwitchBtn) {
+  authSwitchBtn.addEventListener("click", () => {
+    setAuthMode(ui.authMode === "register" ? "login" : "register");
+  });
+}
+
+if (authCancelBtn) {
+  authCancelBtn.addEventListener("click", () => {
+    closeAuthModal();
+  });
+}
+
+if (authModal) {
+  authModal.addEventListener("click", (event) => {
+    if (event.target === authModal) closeAuthModal();
+  });
+}
+
+async function submitAuth() {
+  const username = String(authUsernameInput?.value || "").trim();
+  const password = String(authPasswordInput?.value || "").trim();
+  const isRegister = ui.authMode === "register";
+
+  if (isRegister) {
+    if (username.length < 3 || password.length < 6) {
+      await showAlert("用户名至少3位，密码至少6位。", "注册失败");
+      return;
+    }
+
+    const registerResult = await registerAccount(username, password);
+    if (!registerResult.ok) {
+      await showAlert(registerResult.message, "注册失败");
+      return;
+    }
+
+    authState.token = registerResult.data.token;
+    authState.username = registerResult.data.username;
+    saveAuthState();
+    closeAuthModal();
+    renderAll();
+    await bootstrapServerState();
+    await showAlert("注册并登录成功。", "欢迎");
+    return;
+  }
+
+  if (!username || !password) {
+    await showAlert("请输入用户名和密码。", "登录失败");
+    return;
+  }
+
+  const loginResult = await loginAccount(username, password);
+  if (!loginResult.ok) {
+    await showAlert(loginResult.message, "登录失败");
+    return;
+  }
+
+  authState.token = loginResult.data.token;
+  authState.username = loginResult.data.username;
+  saveAuthState();
+  closeAuthModal();
+  renderAll();
+  await bootstrapServerState();
+  await showAlert("登录成功。", "欢迎回来");
+}
+
+if (authSubmitBtn) {
+  authSubmitBtn.addEventListener("click", async () => {
+    await submitAuth();
+  });
+}
+
+if (authPasswordInput) {
+  authPasswordInput.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    await submitAuth();
+  });
+}
+
+if (authLogoutBtn) {
+  authLogoutBtn.addEventListener("click", async () => {
+    await logoutAccount();
+    renderAll();
+    await showAlert("已退出登录。", "账户");
+  });
+}
 
 restorePointBtn.addEventListener("click", () => {
   const pointId = restorePointSelect.value;
@@ -1986,6 +2159,9 @@ exportBtn.addEventListener("click", () => {
   a.download = `kids-star-reward-${todayKey()}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  state.lastBackupExportAt = Date.now();
+  saveData();
+  renderBackupReminder();
 });
 
 exportCsvBtn.addEventListener("click", () => {
@@ -2051,7 +2227,63 @@ importInput.addEventListener("change", () => {
   reader.readAsText(file);
 });
 
-clearTaskEdit();
-clearRewardEdit();
-saveData();
-renderAll();
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").catch(() => {
+      // ignore registration errors in unsupported hosting setups
+    });
+  });
+}
+
+async function bootstrapServerState() {
+  const status = await syncAdapter.getStatus();
+  if (!status.canSync) return;
+
+  const result = await syncAdapter.pull();
+  if (result.ok && result.data) {
+    applyPulledServerData(result.data, {
+      successStatus: "启动拉取成功",
+      historyText: ""
+    });
+    return;
+  }
+
+  if (String(result.message || "").includes("暂无") || String(result.message || "").includes("no state")) {
+    const pushed = await syncAdapter.push();
+    setSyncStatus(pushed.ok ? "初始化上传成功" : "初始化上传失败");
+    saveData();
+    renderAll();
+  }
+}
+
+async function initApp() {
+  if (authState.token) {
+    const me = await fetchMe();
+    if (me.ok) {
+      authState.username = me.username;
+      saveAuthState();
+    } else {
+      clearAuthState();
+    }
+  }
+
+  clearTaskEdit();
+  clearRewardEdit();
+  saveData();
+  renderAll();
+  await bootstrapServerState();
+
+  const status = await syncAdapter.getStatus();
+  const shouldWarnServerDown =
+    Boolean(authState.token) &&
+    !status.canSync &&
+    !String(status.message || "").includes("请先登录账户") &&
+    sessionStorage.getItem("ksr_sync_warned") !== "1";
+
+  if (shouldWarnServerDown) {
+    sessionStorage.setItem("ksr_sync_warned", "1");
+    await showAlert("服务器当前不可用，数据暂存本地，恢复后会继续自动保存。", "同步提醒");
+  }
+}
+
+initApp();
