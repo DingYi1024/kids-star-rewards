@@ -3019,7 +3019,6 @@ if (bankEnabledToggle) {
     addHistory(`银行功能：${state.bankConfig.enabled ? "已开启" : "已关闭"}`, 0, "system");
     saveData({ feedbackText: state.bankConfig.enabled ? "银行功能已开启" : "银行功能已关闭" });
     renderAll();
-    showAlert(state.bankConfig.enabled ? "银行功能已开启，孩子界面将显示银行" : "银行功能已关闭，孩子界面将隐藏银行", "✅ 设置已保存");
   });
 }
 
