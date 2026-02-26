@@ -99,6 +99,7 @@ const defaultData = {
     ]
   },
   theme: "sunny",
+  deletedIds: [],
   restorePoints: [],
   tasks: [
     { id: crypto.randomUUID(), name: "阅读20分钟", stars: 2, needProof: false },
@@ -191,6 +192,8 @@ function normalizeDataShape() {
   if (typeof state.parentUnlockUntil !== "number") state.parentUnlockUntil = 0;
   if (!state.checkinDays || typeof state.checkinDays !== "object") state.checkinDays = {};
   if (!Array.isArray(state.ratingUndoStack)) state.ratingUndoStack = [];
+  if (!Array.isArray(state.deletedIds)) state.deletedIds = [];
+  state.deletedIds = state.deletedIds.filter((id) => typeof id === "string" && id).slice(-500);
   if (!state.makeupConfig || typeof state.makeupConfig !== "object") {
     state.makeupConfig = { weeklyLimit: 1, windowDays: 1, countForMilestone: false, weeklyCardGrant: 1 };
   }
@@ -1514,6 +1517,7 @@ function removeTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   captureRestorePoint("删除任务前");
   state.tasks = state.tasks.filter((item) => item.id !== taskId);
+  if (taskId && !state.deletedIds.includes(taskId)) state.deletedIds.push(taskId);
   for (const day of Object.keys(state.completions)) {
     if (state.completions[day] && state.completions[day][taskId]) delete state.completions[day][taskId];
   }
@@ -1528,6 +1532,7 @@ function removeReward(rewardId) {
   const reward = state.rewards.find((item) => item.id === rewardId);
   captureRestorePoint("删除奖励前");
   state.rewards = state.rewards.filter((item) => item.id !== rewardId);
+  if (rewardId && !state.deletedIds.includes(rewardId)) state.deletedIds.push(rewardId);
   if (reward) addHistory(`删除奖励「${reward.name}」`, 0, "system");
   if (reward) addAudit(`删除奖励：${reward.name}`, 0, "system", { action: "delete_reward" });
   if (ui.editingRewardId === rewardId) clearRewardEdit();
@@ -2288,7 +2293,7 @@ function applyPulledServerData(serverData, options = {}) {
   renderAll();
 }
 
-function mergeByIdList(serverList = [], localList = []) {
+function mergeByIdList(serverList = [], localList = [], tombstones = null) {
   const map = new Map();
   for (const item of serverList) {
     if (!item?.id) continue;
@@ -2297,6 +2302,9 @@ function mergeByIdList(serverList = [], localList = []) {
   for (const item of localList) {
     if (!item?.id) continue;
     map.set(item.id, { ...item });
+  }
+  if (tombstones && tombstones.size > 0) {
+    for (const id of tombstones) map.delete(id);
   }
   return Array.from(map.values());
 }
@@ -2320,23 +2328,25 @@ function mergeCompletions(serverCompletions = {}, localCompletions = {}) {
   return merged;
 }
 
-function mergeHistory(serverHistory = [], localHistory = []) {
+function mergeHistory(serverHistory = [], localHistory = [], tombstones = null) {
   const seen = new Set();
   const list = [];
   for (const item of [...localHistory, ...serverHistory]) {
     if (!item?.id || seen.has(item.id)) continue;
+    if (tombstones && tombstones.has(item.id)) continue;
     seen.add(item.id);
     list.push({ ...item });
   }
   return list.slice(0, 180);
 }
 
-function mergeRedeemLog(serverRedeem = [], localRedeem = []) {
+function mergeRedeemLog(serverRedeem = [], localRedeem = [], tombstones = null) {
   const seen = new Set();
   const list = [];
   for (const item of [...localRedeem, ...serverRedeem]) {
     const key = `${item?.rewardId || ""}|${item?.day || ""}`;
     if (!item?.rewardId || !item?.day || seen.has(key)) continue;
+    if (tombstones && item.id && tombstones.has(item.id)) continue;
     seen.add(key);
     list.push({ ...item });
   }
@@ -2347,11 +2357,19 @@ function mergeStatesForConflict(serverData, localData) {
   const merged = { ...structuredClone(defaultData), ...structuredClone(serverData || {}) };
   const local = { ...structuredClone(defaultData), ...structuredClone(localData || {}) };
 
-  merged.tasks = mergeByIdList(merged.tasks, local.tasks);
-  merged.rewards = mergeByIdList(merged.rewards, local.rewards);
+  // Step 1: Merge tombstones from both sides
+  const combinedDeletedIds = new Set([
+    ...(merged.deletedIds || []),
+    ...(local.deletedIds || [])
+  ]);
+  merged.deletedIds = Array.from(combinedDeletedIds).slice(-500);
+
+  // Step 2: Merge lists with tombstone filtering
+  merged.tasks = mergeByIdList(merged.tasks, local.tasks, combinedDeletedIds);
+  merged.rewards = mergeByIdList(merged.rewards, local.rewards, combinedDeletedIds);
   merged.completions = mergeCompletions(merged.completions, local.completions);
-  merged.history = mergeHistory(merged.history, local.history);
-  merged.redeemLog = mergeRedeemLog(merged.redeemLog, local.redeemLog);
+  merged.history = mergeHistory(merged.history, local.history, combinedDeletedIds);
+  merged.redeemLog = mergeRedeemLog(merged.redeemLog, local.redeemLog, combinedDeletedIds);
 
   merged.earningsByDay = { ...(merged.earningsByDay || {}), ...(local.earningsByDay || {}) };
   merged.rewardWeeklyUsage = { ...(merged.rewardWeeklyUsage || {}), ...(local.rewardWeeklyUsage || {}) };
@@ -2359,6 +2377,7 @@ function mergeStatesForConflict(serverData, localData) {
   merged.makeupCardGrantByWeek = { ...(merged.makeupCardGrantByWeek || {}), ...(local.makeupCardGrantByWeek || {}) };
   merged.bonusUsageByWeek = { ...(merged.bonusUsageByWeek || {}), ...(local.bonusUsageByWeek || {}) };
 
+  // Step 3: Keep server wallet stars, then apply local-only ledger delta.
   const serverIds = new Set((serverData?.history || []).map((item) => item?.id).filter(Boolean));
   const localOnlyDelta = (local.history || [])
     .filter((item) => item?.id && !serverIds.has(item.id))
@@ -2368,7 +2387,7 @@ function mergeStatesForConflict(serverData, localData) {
   merged.weeklyGoal = local.weeklyGoal;
   merged.weeklyGoalChest = local.weeklyGoalChest;
   merged.weeklyGoalChestClaimedByWeek = { ...(merged.weeklyGoalChestClaimedByWeek || {}), ...(local.weeklyGoalChestClaimedByWeek || {}) };
-  merged.unclaimedGoalChests = mergeByIdList(merged.unclaimedGoalChests, local.unclaimedGoalChests);
+  merged.unclaimedGoalChests = mergeByIdList(merged.unclaimedGoalChests, local.unclaimedGoalChests, combinedDeletedIds);
   merged.weeklyGoalRolloverCursor = local.weeklyGoalRolloverCursor || merged.weeklyGoalRolloverCursor;
   merged.bank = local.bank;
   merged.bankConfig = local.bankConfig;
